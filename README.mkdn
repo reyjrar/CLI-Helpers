@@ -1,6 +1,6 @@
 # NAME
 
-CLI::Helpers - Subroutines for making simple command-line utilities
+CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
@@ -45,7 +45,11 @@ Colors would be automatically enabled based on the user's ~/.gitconfig
 
 This module provides a libray of useful functions for constructing simple command
 line interfaces.  It is able to extract information from the environment and your
-~/.gitconfig to display data in a reasonable mannder.
+~/.gitconfig to display data in a reasonable manner.
+
+Using this module adds argument parsing using [Getopt::Long](http://search.cpan.org/perldoc?Getopt::Long) to your script.  It
+enables passthrough, so you can still use your own argument parsing routines or
+Getopt::Long in your script.
 
 # FUNCTIONS
 
@@ -86,7 +90,8 @@ can be used during development to enable/disable the DEBUG/VERBOSE settings.
 
 # EXPORT
 
-This module uses Sub::Exporter for method renaming, etc.
+This module uses [Sub::Exporter](http://search.cpan.org/perldoc?Sub::Exporter) for flexible imports, the defaults provided by
+:all are as follows.
 
 ## Exported Functions
 
@@ -96,14 +101,10 @@ This module uses Sub::Exporter for method renaming, etc.
     debug_var ( \$var )
     override( option => $value )
 
-# COMMAND LINE ARGUMENTS
-
-CLI::Helpers prepends it's option parsing in front of your scripts options
-to setup your output options.  Those options are:
-
 # ARGS
 
 From CLI::Helpers:
+
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity
     --debug             Show developer output
@@ -167,3 +168,8 @@ This software is Copyright (c) 2013 by Brad Lhotsky.
 This is free software, licensed under:
 
     The (three-clause) BSD License
+
+# SOURCE
+
+The development version is on github at [http://https://github.com/reyjrar/CLI-Helpers](http://https://github.com/reyjrar/CLI-Helpers)
+and may be cloned from [git://https://github.com/reyjrar/CLI-Helpers.git](git://https://github.com/reyjrar/CLI-Helpers.git)

@@ -1,7 +1,8 @@
-# ABSTRACT: Subroutines for making simple command-line utilities
+# ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
 
 our $VERSION = 0.1;
+our $_OPTIONS_PARSED;
 
 use strict;
 use warnings;
@@ -13,7 +14,8 @@ use Getopt::Long qw(:config pass_through);
 
 =head1 EXPORT
 
-This module uses Sub::Exporter for method renaming, etc.
+This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
+:all are as follows.
 
 =head2 Exported Functions
 
@@ -31,15 +33,10 @@ use Sub::Exporter -setup => {
     ],
 };
 
-
-=head1 COMMAND LINE ARGUMENTS
-
-CLI::Helpers prepends it's option parsing in front of your scripts options
-to setup your output options.  Those options are:
-
 =head1 ARGS
 
 From CLI::Helpers:
+
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity
     --debug             Show developer output
@@ -48,12 +45,15 @@ From CLI::Helpers:
 =cut
 
 my %opt = ();
-GetOptions(\%opt,
-    'color!',
-    'verbose+',
-    'debug',
-    'quiet',
-);
+if( !defined $_OPTIONS_PARSED ) {
+    GetOptions(\%opt,
+        'color!',
+        'verbose+',
+        'debug',
+        'quiet',
+    );
+    $_OPTIONS_PARSED = 1;
+}
 # Set defaults
 my %DEF = (
     DEBUG       => $opt{debug} || 0,
@@ -262,8 +262,11 @@ Colors would be automatically enabled based on the user's ~/.gitconfig
 
 This module provides a libray of useful functions for constructing simple command
 line interfaces.  It is able to extract information from the environment and your
-~/.gitconfig to display data in a reasonable mannder.
+~/.gitconfig to display data in a reasonable manner.
 
+Using this module adds argument parsing using L<Getopt::Long> to your script.  It
+enables passthrough, so you can still use your own argument parsing routines or
+Getopt::Long in your script.
 
 =head1 OUTPUT OPTIONS
 
