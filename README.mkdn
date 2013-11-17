@@ -1,0 +1,169 @@
+# NAME
+
+CLI::Helpers - Subroutines for making simple command-line utilities
+
+# VERSION
+
+version 0.1
+
+# SYNOPSIS
+
+Use this module to make writing intelligent command line scripts easier.
+
+    #!/usr/bin/env perl
+    use CLI::Helpers qw(:all);
+
+    output({color=>'green'}, "Hello, World!");
+    verbose({indent=>1,color=>'yellow'}, "Shiny, happy people!");
+    verbose({level=>2,kv=>1,color=>'red'}, a => 1, b => 2);
+    debug_var({ c => 3, d => 4});
+
+Running as test.pl:
+
+    $ ./test.pl
+    Hello, World!
+    $ ./test.pl --verbose
+    Hello, World!
+      Shiny, Happy people!
+    $ ./test.pl -vv
+    Hello, World!
+      Shiny, Happy people!
+      a: 1
+      b: 2
+    $ ./test.pl --debug
+    Hello, World!
+      Shiny, Happy people!
+      a: 1
+      b: 2
+    ---
+    c: 3
+    d: 4
+
+Colors would be automatically enabled based on the user's ~/.gitconfig
+
+# OVERVIEW
+
+This module provides a libray of useful functions for constructing simple command
+line interfaces.  It is able to extract information from the environment and your
+~/.gitconfig to display data in a reasonable mannder.
+
+# FUNCTIONS
+
+## git\_color\_check
+
+Not exported by default.  Returns 1 if git is configured to output
+using color of 0 if color is not enabled.
+
+## colorize( $color => 'message to be output' )
+
+Not exported by default.  Checks if color is enabled and applies
+the specified color to the string.
+
+## output( \\%opts, @messages )
+
+Exported.  Takes an optional hash reference and a list of
+messages to be output.
+
+## verbose( \\%opts, @messages )
+
+Exported.  Takes an optional hash reference of formatting options.  Automatically
+overrides the __level__ paramter to 1 if it's not set.
+
+## debug( \\%opts, @messages )
+
+Exported.  Takes an optional hash reference of formatting options.
+Does not output anything unless DEBUG is set.
+
+## debug\_var( \\%opts, \\%Variable )
+
+Exported.  Takes an optional hash reference of formatting options.
+Does not output anything unless DEBUG is set.
+
+## override( variable => 1 )
+
+Exported.  Allows a block of code to override the debug or verbose level.  This
+can be used during development to enable/disable the DEBUG/VERBOSE settings.
+
+# EXPORT
+
+This module uses Sub::Exporter for method renaming, etc.
+
+## Exported Functions
+
+    output  ( \%options, @messages )
+    verbose ( \%options, @messages )
+    debug   ( \%options, @messages )
+    debug_var ( \$var )
+    override( option => $value )
+
+# COMMAND LINE ARGUMENTS
+
+CLI::Helpers prepends it's option parsing in front of your scripts options
+to setup your output options.  Those options are:
+
+# ARGS
+
+From CLI::Helpers:
+    --color             Boolean, enable/disable color, default use git settings
+    --verbose           Incremental, increase verbosity
+    --debug             Show developer output
+    --quiet             Show no output (for cron)
+
+# OUTPUT OPTIONS
+
+Every output function takes an optional HASH reference containing options for
+that output.  The hash may contain the following options:
+
+- __color__
+
+    String. Using Term::ANSIColor for output, use the color designated, ie:
+
+        red,blue,green,yellow,cyan,magenta,white,black, etc..
+
+- __level__
+
+    Integer. For verbose output, this is basically the number of -v's necessary to see
+    this output.
+
+- __stderr__
+
+    Bool. Use STDERR for this message instead of STDOUT.  The advantage to using this is the
+    "quiet" option will silence these messages as well.
+
+- __indent__
+
+    Integer.  This will indent by 2 times the specified integer the next string.  Useful
+    for creating nested output in a script.
+
+- __clear__
+
+    Integer.  The number of newlines before this output.
+
+- __kv__
+
+    Bool.  The array of messsages is actually a key/value pair, this implements special coloring and
+    expects the number of messages to be even.
+
+        output(qw(a 1 b 2));
+        # a
+        # 1
+        # b
+        # 2
+
+    Using kv, the output will look like this:
+
+        output({kv=>1}, qw(a 1 b 2));
+        # a: 1
+        # b: 2
+
+# AUTHOR
+
+Brad Lhotsky <brad@divisionbyzero.net>
+
+# COPYRIGHT AND LICENSE
+
+This software is Copyright (c) 2013 by Brad Lhotsky.
+
+This is free software, licensed under:
+
+    The (three-clause) BSD License
