@@ -64,6 +64,12 @@ my %DEF = (
 );
 debug_var(\%DEF);
 
+=func def
+
+Not exported by default, returns the setting defined.
+
+=cut
+
 sub def { return exists $DEF{$_[0]} ? $DEF{$_[0]} : undef }
 
 =func git_color_check

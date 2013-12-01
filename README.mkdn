@@ -53,6 +53,10 @@ Getopt::Long in your script.
 
 # FUNCTIONS
 
+## def
+
+Not exported by default, returns the setting defined.
+
 ## git\_color\_check
 
 Not exported by default.  Returns 1 if git is configured to output
