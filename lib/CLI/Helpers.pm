@@ -123,7 +123,7 @@ sub output {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
 
     # Quiet mode!
-    return if $DEF{quiet};
+    return if $DEF{QUIET};
 
     # Input/output Arrays
     my @input = @_;
