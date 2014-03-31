@@ -1,7 +1,7 @@
 # ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
 
-our $VERSION = 0.2;
+our $VERSION = 0.3;
 our $_OPTIONS_PARSED;
 
 use strict;
@@ -9,6 +9,7 @@ use warnings;
 
 use IPC::Run3;
 use Term::ANSIColor;
+use Term::ReadLine;
 use YAML;
 use Getopt::Long qw(:config pass_through);
 
@@ -25,12 +26,23 @@ This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
     debug_var ( \$var )
     override( option => $value )
 
+    menu       ( "Question", \%Options or \@Options )
+    text_input ( "Question", validate => { "error message" => sub { length $_[0] } } )
+    confirm    ( "Question" )
+
+    prompt()    Wrapper which mimicks IO::Prompt a bit
+
 =cut
 
 use Sub::Exporter -setup => {
-    exports => [
-        qw(output verbose debug debug_var override)
-    ],
+    exports => [qw(
+        output verbose debug debug_var override
+        prompt confirm text_input menu
+    )],
+    groups => {
+        input  => [qw(prompt menu text_input confirm)],
+        output => [qw(output verbose debug debug_var)],
+    }
 };
 
 =head1 ARGS
@@ -63,6 +75,9 @@ my %DEF = (
     QUIET       => $opt{quiet} || 0,
 );
 debug_var(\%DEF);
+
+# Initialize the Term::ReadLine object
+my $TERM = Term::ReadLine->new($0);
 
 =func def
 
@@ -229,6 +244,143 @@ sub override {
     $DEF{$def_var} = $value;
 }
 
+=func confirm("prompt")
+
+Exported.  Creates a Yes/No Prompt which accepts y/n or yes/no case insensitively
+but requires one or the other.
+
+Returns 1 for 'yes' and 0 for 'no'
+
+=cut
+
+my $_Confirm_Valid;
+sub confirm {
+    my ($question) = @_;
+    $_Confirm_Valid ||= {qw(y 1 yes 1 n 0 no 0)};
+
+    $question =~ s/\s*$/ [yN] /;
+    my $answer = undef;
+    until( defined $answer && exists $_Confirm_Valid->{$answer} ) {
+        output({color=>'red',stderr=>1},"ERROR: must be one of 'y','n','yes','no'") if defined $answer;
+        $answer = lc $TERM->readline($question);
+    }
+    return $_Confirm_Valid->{$answer};
+}
+
+=func text_input("prompt", validate => { "too short" => sub { length $_ > 10 } })
+
+Exported.  Provides a prompt to the user for input.  If validate is passed, it should be a hash reference
+containing keys of error messages and values which are subroutines to validate the input available as $_.
+If a validator fails, it's error message will be displayed, and the user will be reprompted.
+
+Returns the text that has passed all validators.
+
+=cut
+
+sub text_input {
+    my $question = shift;
+    my %args = @_;
+
+    # Make sure there's a space before the prompt
+    $question =~ s/\s*$/ /;
+    my $OUT = $TERM->OUT || \*STDOUT;
+    my $validate = exists $args{validate} ? $args{validate} : {};
+
+    my $text;
+    my $error = undef;
+    until( defined $text && !defined $error ) {
+        output({color=>'red',stderr=>1},"ERROR: $error") if defined $error;
+
+        # Try to have the user answer the question
+        $error=undef;
+        $text = $TERM->readline($question);
+        $TERM->addhistory($text) if $text =~ /\S/;
+        foreach my $v (keys %{$validate}) {
+            local $_ = $text;
+            if( $validate->{$v}->() > 0 ) {
+                debug("validated: $v");
+                next;
+            }
+            $error = $v;
+            last;
+        }
+    }
+    return $text;
+}
+
+=func menu("prompt", $ArrayOrHashRef)
+
+Exported.  Used to create a menu of options from a list.  Can be either a hash or array reference
+as the second argument.  In the case of a hash reference, the values will be displayed as options while
+the selected key is returned.  In the case of an array reference, each element in the list is displayed
+the selected element will be returned.
+
+Returns selected element (HashRef -> Key, ArrayRef -> The Element)
+
+=cut
+
+sub menu {
+    my ($question,$opts) = @_;
+    my %desc = ();
+
+    # Determine how to handle this list
+    if( ref $opts eq 'ARRAY' ) {
+        %desc = map { $_ => $_ } @{ $opts };
+    }
+    elsif( ref $opts eq 'HASH' ) {
+        %desc = %{ $opts };
+    }
+    my $OUT = $TERM->OUT || \*STDOUT;
+
+    print $OUT "$question\n\n";
+    my %ref = ();
+    my $id  = 1;
+    foreach my $key (sort keys %desc) {
+        $ref{$id} = $key;
+        $id++;
+    }
+
+    my $choice;
+    until( defined $choice && exists $ref{$choice} ) {
+        output({color=>'red',stderr=>1},"ERROR: invalid selection") if defined $choice;
+        foreach my $id (sort { $a <=> $b } keys %ref) {
+            printf $OUT "    %d. %s\n", $id, $desc{$ref{$id}};
+        }
+        print $OUT "\n";
+        $choice = $TERM->readline("Selection (1-$id): ");
+        $TERM->addhistory($choice) if $choice =~ /\S/;
+    }
+    return $ref{$choice};
+}
+
+=func prompt("Prompt", options )
+
+Exported.  Wrapper function with rudimentary mimickery of IO::Prompt(er).
+Uses:
+
+    # Mapping back to confirm();
+    my $value = prompt "Are you sure?", yn => 1;
+
+    # Mapping back to text_input();
+    my $value = prompt "Enter something:";
+
+    # With Validator
+    my $value = prompt "Enter an integer:", validate => { "not a number" => sub { /^\d+$/ } }
+
+    # Pass to menu();
+    my $value = prompt "Select your favorite animal:", menu => [qw(dog cat pig fish otter)];
+
+=cut
+
+sub prompt {
+    my ($prompt) = shift;
+    my %args = @_;
+
+    return confirm($prompt) if exists $args{yn};
+    return menu($prompt, $args{menu}) if exists $args{menu};
+    return text_input($prompt,%args);
+}
+
 =head1 SYNOPSIS
 
 Use this module to make writing intelligent command line scripts easier.
@@ -240,6 +392,22 @@ Use this module to make writing intelligent command line scripts easier.
     verbose({indent=>1,color=>'yellow'}, "Shiny, happy people!");
     verbose({level=>2,kv=>1,color=>'red'}, a => 1, b => 2);
     debug_var({ c => 3, d => 4});
+
+    # Wait for confirmation
+    die "ABORTING" unless confirm("Are you sure?");
+
+    # Ask for a number
+    my $integer = prompt "Enter an integer:", validate => { "not a number" => sub { /^\d+$/ } }
+
+    # Ask for next move
+    my %menu = (
+        north => "Go north.",
+        south => "Go south.",
+    );
+    my $dir = prompt "Where to, adventurous explorer?", menu => \%menu;
+
+    # Ask for a favorite animal
+    my $favorite = menu("Select your favorite animal:", [qw(dog cat pig fish otter)]);
 
 Running as test.pl:
 
