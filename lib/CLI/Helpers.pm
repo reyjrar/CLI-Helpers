@@ -13,6 +13,14 @@ use Term::ReadLine;
 use YAML;
 use Getopt::Long qw(:config pass_through);
 
+{ # Work-around for CPAN Smoke Test Failure
+    # Details: http://perldoc.perl.org/5.8.9/Term/ReadLine.html#CAVEATS
+    open( my $FH, "/dev/tty" )
+        or eval 'sub Term::ReadLine::findConsole { ("&STDIN", "&STDERR") }';
+    die $@ if $@;
+    close $FH;
+} # End Work-around
+
 =head1 EXPORT
 
 This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
