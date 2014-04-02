@@ -84,8 +84,7 @@ my %DEF = (
 );
 debug_var(\%DEF);
 
-# Initialize the Term::ReadLine object
-my $TERM = Term::ReadLine->new($0);
+my $TERM = undef;
 
 =func def
 
@@ -264,6 +263,9 @@ Returns 1 for 'yes' and 0 for 'no'
 my $_Confirm_Valid;
 sub confirm {
     my ($question) = @_;
+
+    # Initialize Globals
+    $TERM ||= Term::ReadLine->new($0);
     $_Confirm_Valid ||= {qw(y 1 yes 1 n 0 no 0)};
 
     $question =~ s/\s*$/ [yN] /;
@@ -288,6 +290,9 @@ Returns the text that has passed all validators.
 sub text_input {
     my $question = shift;
     my %args = @_;
+
+    # Initialize Term
+    $TERM ||= Term::ReadLine->new($0);
 
     # Make sure there's a space before the prompt
     $question =~ s/\s*$/ /;
@@ -330,6 +335,9 @@ Returns selected element (HashRef -> Key, ArrayRef -> The Element)
 sub menu {
     my ($question,$opts) = @_;
     my %desc = ();
+
+    # Initialize Term
+    $TERM ||= Term::ReadLine->new($0);
 
     # Determine how to handle this list
     if( ref $opts eq 'ARRAY' ) {
