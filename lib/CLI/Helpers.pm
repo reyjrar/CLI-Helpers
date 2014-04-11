@@ -108,7 +108,9 @@ sub git_color_check {
         run3(\@cmd, undef, \$out, \$err);
     };
     if( $@  || $err ) {
-        debug("git_color_check error: $err ($@)");
+        my $error = defined $err ? $err : '';
+        $error   .= defined $@   ? " $@" : '';
+        debug("git_color_check error: $error");
         return 0;
     }
     debug("git_color_check out: $out");
