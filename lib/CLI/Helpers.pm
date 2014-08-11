@@ -1,7 +1,7 @@
 # ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
 
-our $VERSION = 0.4;
+our $VERSION = 0.5;
 our $_OPTIONS_PARSED;
 
 use strict;
@@ -57,6 +57,7 @@ use Sub::Exporter -setup => {
 
 From CLI::Helpers:
 
+    --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity
     --debug             Show developer output
@@ -71,9 +72,21 @@ if( !defined $_OPTIONS_PARSED ) {
         'verbose+',
         'debug',
         'quiet',
+        'data-file:s',
     );
     $_OPTIONS_PARSED = 1;
 }
+
+my $data_fh = undef;
+if( exists $opt{'data-file'} ) {
+    eval {
+        open($data_fh, '>', $opt{'data-file'}) or die "data file unwritable: $!";
+    };
+    if( my $error = $@ ) {
+        output({color=>'red',stderr=>1}, "Attempted to write to $opt{'data-file'} failed: $!");
+    }
+}
+
 # Set defaults
 my %DEF = (
     DEBUG       => $opt{debug} || 0,
@@ -183,6 +196,11 @@ sub output {
     print $out_handle "\n"x$opts->{clear} if exists $opts->{clear};
     # Print output
     print $out_handle "${indent}$_\n" for @output;
+
+    # Handle data, which is raw
+    if(defined $data_fh && exists $opts->{data} && $opts->{data}) {
+        print $data_fh "$_\n" for @input;
+    }
 }
 =func verbose( \%opts, @messages )
 
@@ -411,6 +429,9 @@ Use this module to make writing intelligent command line scripts easier.
     verbose({level=>2,kv=>1,color=>'red'}, a => 1, b => 2);
     debug_var({ c => 3, d => 4});
 
+    # Data
+    output({data=>1}, join(',', qw(a b c d)));
+
     # Wait for confirmation
     die "ABORTING" unless confirm("Are you sure?");
 
@@ -431,14 +452,17 @@ Running as test.pl:
 
     $ ./test.pl
     Hello, World!
+    a,b,c,d
     $ ./test.pl --verbose
     Hello, World!
       Shiny, Happy people!
+    a,b,c,d
     $ ./test.pl -vv
     Hello, World!
       Shiny, Happy people!
       a: 1
       b: 2
+    a,b,c,d
     $ ./test.pl --debug
     Hello, World!
       Shiny, Happy people!
@@ -447,6 +471,14 @@ Running as test.pl:
     ---
     c: 3
     d: 4
+    a,b,c,d
+
+    $ ./test.pl --data-file=output.csv
+    Hello, World!
+    a,b,c,d
+    $ cat output.csv
+    a,b,c,d
+
 
 Colors would be automatically enabled based on the user's ~/.gitconfig
 
@@ -508,6 +540,13 @@ Using kv, the output will look like this:
     output({kv=>1}, qw(a 1 b 2));
     # a: 1
     # b: 2
+    #
+
+=item B<data>
+
+Bool.  Lines tagged with "data => 1" will be output to the data-file if a user specifies it.  This allows
+you to provide header/footers and inline context for the main CLI, but output just the data to a file for
+piping elsewhere.
 
 =back
 

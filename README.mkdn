@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 0.4
+version 0.5
 
 # SYNOPSIS
 
@@ -17,6 +17,9 @@ Use this module to make writing intelligent command line scripts easier.
     verbose({indent=>1,color=>'yellow'}, "Shiny, happy people!");
     verbose({level=>2,kv=>1,color=>'red'}, a => 1, b => 2);
     debug_var({ c => 3, d => 4});
+
+    # Data
+    output({data=>1}, join(',', qw(a b c d)));
 
     # Wait for confirmation
     die "ABORTING" unless confirm("Are you sure?");
@@ -38,14 +41,17 @@ Running as test.pl:
 
     $ ./test.pl
     Hello, World!
+    a,b,c,d
     $ ./test.pl --verbose
     Hello, World!
       Shiny, Happy people!
+    a,b,c,d
     $ ./test.pl -vv
     Hello, World!
       Shiny, Happy people!
       a: 1
       b: 2
+    a,b,c,d
     $ ./test.pl --debug
     Hello, World!
       Shiny, Happy people!
@@ -54,6 +60,13 @@ Running as test.pl:
     ---
     c: 3
     d: 4
+    a,b,c,d
+
+    $ ./test.pl --data-file=output.csv
+    Hello, World!
+    a,b,c,d
+    $ cat output.csv
+    a,b,c,d
 
 Colors would be automatically enabled based on the user's ~/.gitconfig
 
@@ -172,6 +185,7 @@ This module uses [Sub::Exporter](https://metacpan.org/pod/Sub::Exporter) for fle
 
 From CLI::Helpers:
 
+    --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity
     --debug             Show developer output
@@ -223,6 +237,13 @@ that output.  The hash may contain the following options:
         output({kv=>1}, qw(a 1 b 2));
         # a: 1
         # b: 2
+        #
+
+- __data__
+
+    Bool.  Lines tagged with "data => 1" will be output to the data-file if a user specifies it.  This allows
+    you to provide header/footers and inline context for the main CLI, but output just the data to a file for
+    piping elsewhere.
 
 # AUTHOR
 
