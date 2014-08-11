@@ -370,10 +370,9 @@ sub menu {
 
     print $OUT "$question\n\n";
     my %ref = ();
-    my $id  = 1;
+    my $id  = 0;
     foreach my $key (sort keys %desc) {
-        $ref{$id} = $key;
-        $id++;
+        $ref{++$id} = $key;
     }
 
     my $choice;
