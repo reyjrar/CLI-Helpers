@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 0.5
+version 0.6
 
 # SYNOPSIS
 
@@ -76,7 +76,7 @@ This module provides a libray of useful functions for constructing simple comman
 line interfaces.  It is able to extract information from the environment and your
 ~/.gitconfig to display data in a reasonable manner.
 
-Using this module adds argument parsing using [Getopt::Long](http://search.cpan.org/perldoc?Getopt::Long) to your script.  It
+Using this module adds argument parsing using [Getopt::Long](https://metacpan.org/pod/Getopt::Long) to your script.  It
 enables passthrough, so you can still use your own argument parsing routines or
 Getopt::Long in your script.
 
@@ -164,7 +164,7 @@ Uses:
 
 # EXPORT
 
-This module uses [Sub::Exporter](http://search.cpan.org/perldoc?Sub::Exporter) for flexible imports, the defaults provided by
+This module uses [Sub::Exporter](https://metacpan.org/pod/Sub::Exporter) for flexible imports, the defaults provided by
 :all are as follows.
 
 ## Exported Functions
