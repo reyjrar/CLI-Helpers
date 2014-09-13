@@ -99,6 +99,16 @@ debug_var(\%DEF);
 
 
 my $TERM = undef;
+my @STICKY = ();
+
+# Allow some messages to be fired at the end the of program
+END {
+    if(@STICKY) {
+        foreach my $args (@STICKY) {
+            output(@{ $args  });
+        }
+    }
+}
 
 =func def
 
@@ -201,6 +211,14 @@ sub output {
     # Handle data, which is raw
     if(defined $data_fh && exists $opts->{data} && $opts->{data}) {
         print $data_fh "$_\n" for @input;
+    }
+
+    # Sticky messages don't just go away
+    if(exists $opts->{sticky}) {
+        my %o = %{ $opts };  # Make a copy because we shifted this off @_
+        # So this doesn't happen in the END block again
+        delete $o{$_} for grep { exists $o{$_} } qw(sticky data);
+        push @STICKY, [ \%o, @input ];
     }
 }
 =func verbose( \%opts, @messages )
@@ -511,6 +529,11 @@ Every output function takes an optional HASH reference containing options for
 that output.  The hash may contain the following options:
 
 =over 4
+
+=item B<sticky>
+
+Any lines tagged with 'sticky' will be replayed at the end program's end.  This
+is to allow a developer to ensure message are seen at the termination of the program.
 
 =item B<color>
 
