@@ -59,7 +59,7 @@ From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
     --color             Boolean, enable/disable color, default use git settings
-    --verbose           Incremental, increase verbosity
+    --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
     --quiet             Show no output (for cron)
 
@@ -69,7 +69,7 @@ my %opt = ();
 if( !defined $_OPTIONS_PARSED ) {
     GetOptions(\%opt,
         'color!',
-        'verbose+',
+        'verbose|v+',
         'debug',
         'quiet',
         'data-file:s',
