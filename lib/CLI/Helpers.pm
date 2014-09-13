@@ -89,13 +89,14 @@ if( exists $opt{'data-file'} ) {
 
 # Set defaults
 my %DEF = (
-    DEBUG       => $opt{debug} || 0,
+    DEBUG       => $opt{debug}   || 0,
     VERBOSE     => $opt{verbose} || 0,
-    COLOR       => $opt{color} || git_color_check(),
+    COLOR       => $opt{color}   || git_color_check(),
     KV_FORMAT   => ': ',
-    QUIET       => $opt{quiet} || 0,
+    QUIET       => $opt{quiet}   || 0,
 );
 debug_var(\%DEF);
+
 
 my $TERM = undef;
 
@@ -311,6 +312,14 @@ sub text_input {
     my $question = shift;
     my %args = @_;
 
+    # Prompt fixes
+    chomp($question);
+    my $terminator = $question =~ s/([^a-zA-Z0-9\)\]\}])\s*$// ? $1 : ':';
+    if(exists $args{default}) {
+        $question .= " (default=$args{default}) ";
+    }
+    $question .= "$terminator ";
+
     # Initialize Term
     $TERM ||= Term::ReadLine->new($0);
 
@@ -328,10 +337,15 @@ sub text_input {
         $error=undef;
         $text = $TERM->readline($question);
         $TERM->addhistory($text) if $text =~ /\S/;
+
+        # Check the default if the person just hit enter
+        if( exists $args{default} && length($text) == 0 ) {
+            return $args{default};
+        }
         foreach my $v (keys %{$validate}) {
             local $_ = $text;
             if( $validate->{$v}->() > 0 ) {
-                debug("validated: $v");
+                debug({indent=>1}," + Validated: $v");
                 next;
             }
             $error = $v;
