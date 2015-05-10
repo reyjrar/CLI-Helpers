@@ -104,7 +104,7 @@ messages to be output.
 ## verbose( \\%opts, @messages )
 
 Exported.  Takes an optional hash reference of formatting options.  Automatically
-overrides the **level** paramter to 1 if it's not set.
+overrides the __level__ paramter to 1 if it's not set.
 
 ## debug( \\%opts, @messages )
 
@@ -201,47 +201,47 @@ From CLI::Helpers:
 Every output function takes an optional HASH reference containing options for
 that output.  The hash may contain the following options:
 
-- **sticky**
+- __sticky__
 
     Any lines tagged with 'sticky' will be replayed at the end program's end.  This
     is to allow a developer to ensure message are seen at the termination of the program.
 
-- **color**
+- __color__
 
     String. Using Term::ANSIColor for output, use the color designated, ie:
 
         red,blue,green,yellow,cyan,magenta,white,black, etc..
 
-- **level**
+- __level__
 
     Integer. For verbose output, this is basically the number of -v's necessary to see
     this output.
 
-- **syslog\_level**
+- __syslog\_level__
 
     String.  Can be any valid syslog\_level as a string: debug, info, notice, warning, err, crit,
     alert, emerg.
 
-- **IMPORTANT**
+- __IMPORTANT__
 
     Bool. Even if --quiet is specified, output this message.  Use sparringly, and yes,
     it is case sensitive.  You need to yell at it for it to yell at your users.
 
-- **stderr**
+- __stderr__
 
     Bool. Use STDERR for this message instead of STDOUT.  The advantage to using this is the
     "quiet" option will silence these messages as well.
 
-- **indent**
+- __indent__
 
     Integer.  This will indent by 2 times the specified integer the next string.  Useful
     for creating nested output in a script.
 
-- **clear**
+- __clear__
 
     Integer.  The number of newlines before this output.
 
-- **kv**
+- __kv__
 
     Bool.  The array of messsages is actually a key/value pair, this implements special coloring and
     expects the number of messages to be even.
@@ -259,7 +259,7 @@ that output.  The hash may contain the following options:
         # b: 2
         #
 
-- **data**
+- __data__
 
     Bool.  Lines tagged with "data => 1" will be output to the data-file if a user specifies it.  This allows
     you to provide header/footers and inline context for the main CLI, but output just the data to a file for
