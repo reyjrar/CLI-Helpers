@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 0.7
+version 0.8
 
 # SYNOPSIS
 
@@ -189,7 +189,12 @@ From CLI::Helpers:
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
+    --debug-class       Show debug messages originating from a specific package, default: main
     --quiet             Show no output (for cron)
+    --syslog            Generate messages to syslog as well
+    --syslog-facility   Default "local0"
+    --syslog-tag        The program name, default is the script name
+    --syslog-debug      Enable debug messages to syslog if in use, default false
 
 # OUTPUT OPTIONS
 
@@ -211,6 +216,16 @@ that output.  The hash may contain the following options:
 
     Integer. For verbose output, this is basically the number of -v's necessary to see
     this output.
+
+- **syslog\_level**
+
+    String.  Can be any valid syslog\_level as a string: debug, info, notice, warning, err, crit,
+    alert, emerg.
+
+- **IMPORTANT**
+
+    Bool. Even if --quiet is specified, output this message.  Use sparringly, and yes,
+    it is case sensitive.  You need to yell at it for it to yell at your users.
 
 - **stderr**
 

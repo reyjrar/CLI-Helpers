@@ -1,17 +1,19 @@
 # ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
 
-our $VERSION = 0.7;
+our $VERSION = 0.8;
 our $_OPTIONS_PARSED;
 
 use strict;
 use warnings;
 
+use File::Basename;
+use Getopt::Long qw(:config pass_through);
 use IPC::Run3;
-use Term::ANSIColor;
+use Sys::Syslog qw(:standard);
+use Term::ANSIColor qw(color colored colorstrip);
 use Term::ReadLine;
 use YAML;
-use Getopt::Long qw(:config pass_through);
 
 { # Work-around for CPAN Smoke Test Failure
     # Details: http://perldoc.perl.org/5.8.9/Term/ReadLine.html#CAVEATS
@@ -61,8 +63,12 @@ From CLI::Helpers:
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
+    --debug-class       Show debug messages originating from a specific package, default: main
     --quiet             Show no output (for cron)
-
+    --syslog            Generate messages to syslog as well
+    --syslog-facility   Default "local0"
+    --syslog-tag        The program name, default is the script name
+    --syslog-debug      Enable debug messages to syslog if in use, default false
 =cut
 
 my %opt = ();
@@ -71,8 +77,13 @@ if( !defined $_OPTIONS_PARSED ) {
         'color!',
         'verbose|v+',
         'debug',
+        'debug-class:s',
         'quiet',
         'data-file:s',
+        'syslog!',
+        'syslog-facility:s',
+        'syslog-tag:s',
+        'syslog-debug!',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -89,14 +100,32 @@ if( exists $opt{'data-file'} ) {
 
 # Set defaults
 my %DEF = (
-    DEBUG       => $opt{debug}   || 0,
-    VERBOSE     => $opt{verbose} || 0,
-    COLOR       => $opt{color}   || git_color_check(),
-    KV_FORMAT   => ': ',
-    QUIET       => $opt{quiet}   || 0,
+    DEBUG           => $opt{debug}   || 0,
+    DEBUG_CLASS     => $opt{'debug-class'} || 'main',
+    VERBOSE         => $opt{verbose} || 0,
+    COLOR           => $opt{color}   // git_color_check(),
+    KV_FORMAT       => ': ',
+    QUIET           => $opt{quiet}   || 0,
+    SYSLOG          => $opt{syslog}  || 0,
+    SYSLOG_TAG      => exists $opt{'syslog-tag'}      && length $opt{'syslog-tag'}      ? $opt{'syslog-tag'} : basename($0),
+    SYSLOG_FACILITY => exists $opt{'syslog-facility'} && length $opt{'syslog-facility'} ? $opt{'syslog-facility'} : 'local0',
+    SYSLOG_DEBUG    => $opt{'syslog-debug'}  || 0,
 );
+debug({color=>'magenta'}, "CLI::Helpers Definitions");
 debug_var(\%DEF);
 
+# Setup the Syslog Subsystem
+if( $DEF{SYSLOG} ) {
+    my $syslog_ok = eval {
+        openlog($DEF{SYSLOG_TAG}, 'ndelay,pid', $DEF{SYSLOG_FACILITY});
+        1;
+    };
+    my $error = $@;
+    if( !$syslog_ok ) {
+        output({stderr=>1,color=>'red'}, "CLI::Helpers could not open syslog: $error");
+        $DEF{SYSLOG}=0;
+    }
+}
 
 my $TERM = undef;
 my @STICKY = ();
@@ -105,9 +134,10 @@ my @STICKY = ();
 END {
     if(@STICKY) {
         foreach my $args (@STICKY) {
-            output(@{ $args  });
+            output({_skip_syslog=>1}, @{ $args  });
         }
     }
+    closelog() if $DEF{SYSLOG};
 }
 
 =func def
@@ -170,9 +200,6 @@ messages to be output.
 sub output {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
 
-    # Quiet mode!
-    return if $DEF{QUIET};
-
     # Input/output Arrays
     my @input = @_;
     my @output = ();
@@ -198,19 +225,44 @@ sub output {
         }
     }
     else {
-        foreach my $msg ( map { colorize($color, $_); } @input) {
-            push @output, $msg;
-        }
+        @output = map { defined $color ? colorize($color, $_) : $_; } @input;
     }
-    my $out_handle = exists $opts->{stderr} && $opts->{stderr} ? \*STDERR : \*STDOUT;
-    # Do clearing
-    print $out_handle "\n"x$opts->{clear} if exists $opts->{clear};
-    # Print output
-    print $out_handle "${indent}$_\n" for @output;
+
+    # Out to the console
+    if( !$DEF{QUIET} || (exists $opts->{IMPORTANT} && $opts->{IMPORTANT})) {
+        my $out_handle = exists $opts->{stderr} && $opts->{stderr} ? \*STDERR : \*STDOUT;
+        # Do clearing
+        print $out_handle "\n"x$opts->{clear} if exists $opts->{clear};
+        # Print output
+        print $out_handle "${indent}$_\n" for @output;
+    }
 
     # Handle data, which is raw
     if(defined $data_fh && exists $opts->{data} && $opts->{data}) {
         print $data_fh "$_\n" for @input;
+    }
+    elsif( $DEF{SYSLOG} && !(exists $opts->{_skip_syslog} && $opts->{_skip_syslog})) {
+        my $level = exists $opts->{syslog_level} ? $opts->{syslog_level} :
+                    exists $opts->{stderr}       ? 'err' :
+                    'notice';
+
+        # Warning for syslogging data file
+        unshift @output, "CLI::Helpers logging a data section, use --data-file to suppress this in syslog."
+            if exists $opts->{data} && $opts->{data};
+
+        # Now syslog the message
+        debug({_skip_syslog=>1,color=>'magenta'}, sprintf "[%s] Syslogging %d messages, with: %s", $level, scalar(@output), join(",", map { $_=>$opts->{$_} } keys %{ $opts }));
+        for( @output ) {
+            # One bad message means no more syslogging
+            my $rc = $DEF{SYSLOG} = eval {
+                syslog($level, colorstrip($_));
+                1;
+            };
+            my $error = $@;
+            if($rc != 1 ) {
+                output({stderr=>1,color=>'red',_skip_syslog=>1}, "syslog() failed: $error");
+            }
+        }
     }
 
     # Sticky messages don't just go away
@@ -221,6 +273,7 @@ sub output {
         push @STICKY, [ \%o, @input ];
     }
 }
+
 =func verbose( \%opts, @messages )
 
 Exported.  Takes an optional hash reference of formatting options.  Automatically
@@ -231,6 +284,7 @@ overrides the B<level> paramter to 1 if it's not set.
 sub verbose {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
     $opts->{level} = 1 unless exists $opts->{level};
+    $opts->{syslog_level} = $opts->{level} > 1 ? 'debug' : 'info';
     my @msgs=@_;
 
     if( !$DEF{DEBUG} ) {
@@ -249,7 +303,19 @@ Does not output anything unless DEBUG is set.
 sub debug {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
     my @msgs=@_;
+
+    # Smarter handling of debug output
     return unless $DEF{DEBUG};
+
+    # Check against caller class
+    my $package = exists $opts->{_caller_package} ? $opts->{_caller_package} : (caller)[0];
+    return unless lc $DEF{DEBUG_CLASS} eq 'all' || $package eq $DEF{DEBUG_CLASS};
+
+    # Check if we really want to debug syslog data
+    $opts->{syslog_level} = 'debug';
+    $opts->{_skip_syslog} //= !$DEF{SYSLOG_DEBUG};
+
+    # Output
     output( $opts, @msgs );
 }
 
@@ -261,16 +327,19 @@ Does not output anything unless DEBUG is set.
 =cut
 
 sub debug_var {
-    return unless $DEF{DEBUG};
-
-    my $opts = {clear => 1};
+    my $opts = {
+        clear           => 1,               # Meant for the screen
+        _skip_syslog    => 1,               # Meant for the screen
+        _caller_package => (caller)[0],     # Make sure this is set on entry
+    };
+    # Merge with options
     if( ref $_[0] eq 'HASH' && defined $_[1] && ref $_[1] ) {
         my $ref = shift;
         foreach my $k (keys %{ $ref } ) {
             $opts->{$k} = $ref->{$k};
         };
     }
-    output( $opts, Dump shift);
+    debug($opts, Dump shift);
 }
 
 =func override( variable => 1 )
@@ -545,6 +614,17 @@ String. Using Term::ANSIColor for output, use the color designated, ie:
 
 Integer. For verbose output, this is basically the number of -v's necessary to see
 this output.
+
+=item B<syslog_level>
+
+String.  Can be any valid syslog_level as a string: debug, info, notice, warning, err, crit,
+alert, emerg.
+
+
+=item B<IMPORTANT>
+
+Bool. Even if --quiet is specified, output this message.  Use sparringly, and yes,
+it is case sensitive.  You need to yell at it for it to yell at your users.
 
 =item B<stderr>
 
