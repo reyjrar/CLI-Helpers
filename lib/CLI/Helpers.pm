@@ -11,7 +11,7 @@ use File::Basename;
 use Getopt::Long qw(:config pass_through);
 use IPC::Run3;
 use Sys::Syslog qw(:standard);
-use Term::ANSIColor qw(color colored colorstrip);
+use Term::ANSIColor 2.01 qw(color colored colorstrip);
 use Term::ReadLine;
 use YAML;
 
