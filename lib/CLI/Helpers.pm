@@ -200,12 +200,12 @@ messages to be output.
 sub output {
     my $opts = ref $_[0] eq 'HASH' ? shift @_ : {};
 
-    # Input/output Arrays
-    my @input = @_;
-    my @output = ();
+    # Return unless we have something to work with;
+    return unless @_;
 
-    # Remove line endings
-    chomp(@input);
+    # Input/output Arrays
+    my @input = map { my $x=$_; chomp($x) if defined $x; $x; } @_;
+    my @output = ();
 
     # Determine the color
     my $color = exists $opts->{color} && defined $opts->{color} ? $opts->{color} : undef;
@@ -220,8 +220,9 @@ sub output {
         while( @input ) {
             my $k = shift @input;
             # We only colorize the value
-            my $v = colorize($color, shift @input );
-            push @output, join($DEF{KV_FORMAT}, $k, $v);
+            my $v = shift @input;
+            $v ||= $DEF{KV_FORMAT} eq ': ' ? '~' : '';
+            push @output, join($DEF{KV_FORMAT}, $k, colorize($color,$v));
         }
     }
     else {
