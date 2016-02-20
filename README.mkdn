@@ -279,5 +279,5 @@ This is free software, licensed under:
 
 # SOURCE
 
-The development version is on github at [http://https://github.com/reyjrar/CLI-Helpers](http://https://github.com/reyjrar/CLI-Helpers)
-and may be cloned from [git://https://github.com/reyjrar/CLI-Helpers.git](git://https://github.com/reyjrar/CLI-Helpers.git)
+The development version is on github at [https://github.com/reyjrar/CLI-Helpers](https://github.com/reyjrar/CLI-Helpers)
+and may be cloned from [git://github.com/reyjrar/CLI-Helpers.git](git://github.com/reyjrar/CLI-Helpers.git)
