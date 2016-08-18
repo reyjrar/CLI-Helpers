@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 1.1
+version 1.2
 
 # SYNOPSIS
 
@@ -310,6 +310,7 @@ This is free software, licensed under:
 # CONTRIBUTORS
 
 - Kang-min Liu <gugod@gugod.org>
+- Kevin M. Goess <kgoess@craigslist.org>
 - Mohammad S Anwar <mohammad.anwar@yahoo.com>
 
 # SUPPORT
