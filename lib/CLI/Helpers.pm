@@ -1,7 +1,7 @@
 # ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
 
-our $VERSION = '1.0';
+our $VERSION = '1.1';
 our $_OPTIONS_PARSED;
 
 use strict;
@@ -12,6 +12,7 @@ use Getopt::Long qw(:config pass_through);
 use IPC::Run3;
 use Sys::Syslog qw(:standard);
 use Term::ANSIColor 2.01 qw(color colored colorstrip);
+use Term::ReadKey;
 use Term::ReadLine;
 use YAML;
 
@@ -41,16 +42,17 @@ This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
     confirm    ( "Question" )
 
     prompt()    Wrapper which mimicks IO::Prompt a bit
+    pwprompt()  Wrapper to get sensitive data
 
 =cut
 
 use Sub::Exporter -setup => {
     exports => [qw(
         output verbose debug debug_var override
-        prompt confirm text_input menu
+        prompt confirm text_input menu pwprompt
     )],
     groups => {
-        input  => [qw(prompt menu text_input confirm)],
+        input  => [qw(prompt menu text_input confirm pwprompt)],
         output => [qw(output verbose debug debug_var)],
     }
 };
@@ -134,7 +136,7 @@ my @STICKY = ();
 END {
     if(@STICKY) {
         foreach my $args (@STICKY) {
-            output({_skip_syslog=>1}, @{ $args  });
+            output(@{ $args });
         }
     }
     closelog() if $DEF{SYSLOG};
@@ -242,7 +244,7 @@ sub output {
     if(defined $data_fh && exists $opts->{data} && $opts->{data}) {
         print $data_fh "$_\n" for @input;
     }
-    elsif( $DEF{SYSLOG} && !(exists $opts->{_skip_syslog} && $opts->{_skip_syslog})) {
+    elsif( $DEF{SYSLOG} && !(exists $opts->{no_syslog} && $opts->{no_syslog})) {
         my $level = exists $opts->{syslog_level} ? $opts->{syslog_level} :
                     exists $opts->{stderr}       ? 'err' :
                     'notice';
@@ -252,7 +254,7 @@ sub output {
             if exists $opts->{data} && $opts->{data};
 
         # Now syslog the message
-        debug({_skip_syslog=>1,color=>'magenta'}, sprintf "[%s] Syslogging %d messages, with: %s", $level, scalar(@output), join(",", map { $_=>$opts->{$_} } keys %{ $opts }));
+        debug({no_syslog=>1,color=>'magenta'}, sprintf "[%s] Syslogging %d messages, with: %s", $level, scalar(@output), join(",", map { $_=>$opts->{$_} } keys %{ $opts }));
         for( @output ) {
             # One bad message means no more syslogging
             my $rc = $DEF{SYSLOG} = eval {
@@ -261,7 +263,7 @@ sub output {
             };
             my $error = $@;
             if($rc != 1 ) {
-                output({stderr=>1,color=>'red',_skip_syslog=>1}, "syslog() failed: $error");
+                output({stderr=>1,color=>'red',no_syslog=>1}, "syslog() failed: $error");
             }
         }
     }
@@ -271,6 +273,7 @@ sub output {
         my %o = %{ $opts };  # Make a copy because we shifted this off @_
         # So this doesn't happen in the END block again
         delete $o{$_} for grep { exists $o{$_} } qw(sticky data);
+        $o{no_syslog} = 1;
         push @STICKY, [ \%o, @input ];
     }
 }
@@ -314,7 +317,7 @@ sub debug {
 
     # Check if we really want to debug syslog data
     $opts->{syslog_level} = 'debug';
-    $opts->{_skip_syslog} //= !$DEF{SYSLOG_DEBUG};
+    $opts->{no_syslog} //= !$DEF{SYSLOG_DEBUG};
 
     # Output
     output( $opts, @msgs );
@@ -330,7 +333,7 @@ Does not output anything unless DEBUG is set.
 sub debug_var {
     my $opts = {
         clear           => 1,               # Meant for the screen
-        _skip_syslog    => 1,               # Meant for the screen
+        no_syslog       => 1,               # Meant for the screen
         _caller_package => (caller)[0],     # Make sure this is set on entry
     };
     # Merge with options
@@ -392,6 +395,25 @@ Exported.  Provides a prompt to the user for input.  If validate is passed, it s
 containing keys of error messages and values which are subroutines to validate the input available as $_.
 If a validator fails, it's error message will be displayed, and the user will be reprompted.
 
+Valid options are:
+
+=over 4
+
+=item B<default>
+
+Any string which will be used as the default value if the user just presses enter.
+
+=item B<validate>
+
+A hashref, keys are error messages, values are sub routines that return true when the value meets the criteria.
+
+=item B<noecho>
+
+Set as a key with any value and the prompt will turn off echoing responses as well as disabling all
+ReadLine magic.  See also B<pwprompt>.
+
+=back
+
 Returns the text that has passed all validators.
 
 =cut
@@ -413,7 +435,6 @@ sub text_input {
 
     # Make sure there's a space before the prompt
     $question =~ s/\s*$/ /;
-    my $OUT = $TERM->OUT || \*STDOUT;
     my $validate = exists $args{validate} ? $args{validate} : {};
 
     my $text;
@@ -423,8 +444,20 @@ sub text_input {
 
         # Try to have the user answer the question
         $error=undef;
-        $text = $TERM->readline($question);
-        $TERM->addhistory($text) if $text =~ /\S/;
+        if( exists $args{noecho} ) {
+            # Disable all the Term ReadLine magic
+            local $|=1;
+            print STDOUT $question;
+            ReadMode('noecho');
+            $text = ReadLine();
+            ReadMode('restore');
+            print STDOUT "\n";
+            chomp($text);
+        }
+        else {
+            $text = $TERM->readline($question);
+            $TERM->addhistory($text) if $text =~ /\S/;
+        }
 
         # Check the default if the person just hit enter
         if( exists $args{default} && length($text) == 0 ) {
@@ -490,6 +523,21 @@ sub menu {
     return $ref{$choice};
 }
 
+=func pwprompt("Prompt", options )
+
+Exported.  Synonym for text_input("Password: ", noecho => 1);  Also requires the password to be longer than 0 characters.
+
+=cut
+
+sub pwprompt {
+    my ($prompt) = @_;
+    $prompt ||= "Password: ";
+    return text_input($prompt,
+        noecho   => 1,
+        validate => { "password length can't be zero." => sub { defined && length } },
+    );
+}
+
 =func prompt("Prompt", options )
 
 Exported.  Wrapper function with rudimentary mimickery of IO::Prompt(er).
@@ -507,6 +555,11 @@ Uses:
     # Pass to menu();
     my $value = prompt "Select your favorite animal:", menu => [qw(dog cat pig fish otter)];
 
+    # If you request a password, autodisable echo:
+    my $passwd = prompt "Password: ";  # sets noecho => 1, disables ReadLine history.
+
+See also: B<text_input>
+
 =cut
 
 sub prompt {
@@ -515,6 +568,12 @@ sub prompt {
 
     return confirm($prompt) if exists $args{yn};
     return menu($prompt, $args{menu}) if exists $args{menu};
+    # Check for a password prompt
+    if( lc($prompt) =~ /passw(or)?d/ ) {
+        $args{noecho} = 1;
+        $args{validate} ||= {};
+        $args{validate}->{"password length can't be zero."} = sub { defined && length };
+    }
     return text_input($prompt,%args);
 }
 
@@ -621,6 +680,10 @@ this output.
 String.  Can be any valid syslog_level as a string: debug, info, notice, warning, err, crit,
 alert, emerg.
 
+=item B<no_syslog>
+
+Bool.  Even if the user specifies --syslog, these lines will not go to the syslog destination.
+alert, emerg.
 
 =item B<IMPORTANT>
 

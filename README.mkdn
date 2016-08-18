@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 1.0
+version 1.1
 
 # SYNOPSIS
 
@@ -134,6 +134,21 @@ Exported.  Provides a prompt to the user for input.  If validate is passed, it s
 containing keys of error messages and values which are subroutines to validate the input available as $\_.
 If a validator fails, it's error message will be displayed, and the user will be reprompted.
 
+Valid options are:
+
+- **default**
+
+    Any string which will be used as the default value if the user just presses enter.
+
+- **validate**
+
+    A hashref, keys are error messages, values are sub routines that return true when the value meets the criteria.
+
+- **noecho**
+
+    Set as a key with any value and the prompt will turn off echoing responses as well as disabling all
+    ReadLine magic.  See also **pwprompt**.
+
 Returns the text that has passed all validators.
 
 ## menu("prompt", $ArrayOrHashRef)
@@ -144,6 +159,10 @@ the selected key is returned.  In the case of an array reference, each element i
 the selected element will be returned.
 
 Returns selected element (HashRef -> Key, ArrayRef -> The Element)
+
+## pwprompt("Prompt", options )
+
+Exported.  Synonym for text\_input("Password: ", noecho => 1);  Also requires the password to be longer than 0 characters.
 
 ## prompt("Prompt", options )
 
@@ -161,6 +180,11 @@ Uses:
 
     # Pass to menu();
     my $value = prompt "Select your favorite animal:", menu => [qw(dog cat pig fish otter)];
+
+    # If you request a password, autodisable echo:
+    my $passwd = prompt "Password: ";  # sets noecho => 1, disables ReadLine history.
+
+See also: **text\_input**
 
 # EXPORT
 
@@ -180,6 +204,7 @@ This module uses [Sub::Exporter](https://metacpan.org/pod/Sub::Exporter) for fle
     confirm    ( "Question" )
 
     prompt()    Wrapper which mimicks IO::Prompt a bit
+    pwprompt()  Wrapper to get sensitive data
 
 # ARGS
 
@@ -220,6 +245,11 @@ that output.  The hash may contain the following options:
 - **syslog\_level**
 
     String.  Can be any valid syslog\_level as a string: debug, info, notice, warning, err, crit,
+    alert, emerg.
+
+- **no\_syslog**
+
+    Bool.  Even if the user specifies --syslog, these lines will not go to the syslog destination.
     alert, emerg.
 
 - **IMPORTANT**
@@ -267,7 +297,7 @@ that output.  The hash may contain the following options:
 
 # AUTHOR
 
-Brad Lhotsky &lt;brad@divisionbyzero.net>
+Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
@@ -277,7 +307,31 @@ This is free software, licensed under:
 
     The (three-clause) BSD License
 
-# SOURCE
+# CONTRIBUTORS
 
-The development version is on github at [https://github.com/reyjrar/CLI-Helpers](https://github.com/reyjrar/CLI-Helpers)
-and may be cloned from [git://github.com/reyjrar/CLI-Helpers.git](git://github.com/reyjrar/CLI-Helpers.git)
+- Kang-min Liu <gugod@gugod.org>
+- Mohammad S Anwar <mohammad.anwar@yahoo.com>
+
+# SUPPORT
+
+## Websites
+
+The following websites have more information about this module, and may be of help to you. As always,
+in addition to those websites please use your favorite search engine to discover more resources.
+
+- MetaCPAN
+
+    A modern, open-source CPAN search engine, useful to view POD in HTML format.
+
+    [http://metacpan.org/release/CLI-Helpers](http://metacpan.org/release/CLI-Helpers)
+
+- RT: CPAN's Bug Tracker
+
+    The RT ( Request Tracker ) website is the default bug/issue tracking system for CPAN.
+
+    [https://rt.cpan.org/Public/Dist/Display.html?Name=CLI-Helpers](https://rt.cpan.org/Public/Dist/Display.html?Name=CLI-Helpers)
+
+## Source Code
+
+This module's source code is available by visiting:
+[https://github.com/reyjrar/CLI-Helpers](https://github.com/reyjrar/CLI-Helpers)
