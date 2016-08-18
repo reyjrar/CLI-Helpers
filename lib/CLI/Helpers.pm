@@ -1,7 +1,8 @@
 # ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
 
-our $VERSION = '1.1';
+# VERSION
+
 our $_OPTIONS_PARSED;
 
 use strict;

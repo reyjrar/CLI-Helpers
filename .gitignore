@@ -3,6 +3,7 @@
 .build
 inc
 blib
+Changes
 CLI-Helpers-*
 MANIFEST
 Makefile
