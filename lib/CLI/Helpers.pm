@@ -530,11 +530,17 @@ Exported.  Synonym for text_input("Password: ", noecho => 1);  Also requires the
 =cut
 
 sub pwprompt {
-    my ($prompt) = @_;
+    my ($prompt, %args) = @_;
     $prompt ||= "Password: ";
+    my @more_validate;
+    if (my $validate = $args{validate}){
+        @more_validate = %$validate;
+    }
     return text_input($prompt,
         noecho   => 1,
-        validate => { "password length can't be zero." => sub { defined && length } },
+        validate => { "password length can't be zero." => sub { defined && length },
+                      @more_validate,
+                    },
     );
 }
 
