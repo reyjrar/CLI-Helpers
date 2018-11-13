@@ -44,7 +44,7 @@ This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
     text_input ( "Question", validate => { "error message" => sub { length $_[0] } } )
     confirm    ( "Question" )
 
-    prompt()    Wrapper which mimicks IO::Prompt a bit
+    prompt()    Wrapper which mimics IO::Prompt a bit
     pwprompt()  Wrapper to get sensitive data
 
 =cut
@@ -284,7 +284,7 @@ sub output {
 =func verbose( \%opts, @messages )
 
 Exported.  Takes an optional hash reference of formatting options.  Automatically
-overrides the B<level> paramter to 1 if it's not set.
+overrides the B<level> parameter to 1 if it's not set.
 
 =cut
 
@@ -396,7 +396,7 @@ sub confirm {
 
 Exported.  Provides a prompt to the user for input.  If validate is passed, it should be a hash reference
 containing keys of error messages and values which are subroutines to validate the input available as $_.
-If a validator fails, it's error message will be displayed, and the user will be reprompted.
+If a validator fails, it's error message will be displayed, and the user will be re-prompted.
 
 Valid options are:
 
@@ -549,7 +549,7 @@ sub pwprompt {
 
 =func prompt("Prompt", options )
 
-Exported.  Wrapper function with rudimentary mimickery of IO::Prompt(er).
+Exported.  Wrapper function with rudimentary mimicry of IO::Prompt(er).
 Uses:
 
     # Mapping back to confirm();
@@ -653,12 +653,12 @@ Colors would be automatically enabled based on the user's ~/.gitconfig
 
 =head1 OVERVIEW
 
-This module provides a libray of useful functions for constructing simple command
+This module provides a library of useful functions for constructing simple command
 line interfaces.  It is able to extract information from the environment and your
 ~/.gitconfig to display data in a reasonable manner.
 
 Using this module adds argument parsing using L<Getopt::Long> to your script.  It
-enables passthrough, so you can still use your own argument parsing routines or
+enables pass-through, so you can still use your own argument parsing routines or
 Getopt::Long in your script.
 
 =head1 OUTPUT OPTIONS
@@ -675,7 +675,7 @@ is to allow a developer to ensure message are seen at the termination of the pro
 
 =item B<color>
 
-String. Using Term::ANSIColor for output, use the color designated, ie:
+String. Using Term::ANSIColor for output, use the color designated, i.e.:
 
     red,blue,green,yellow,cyan,magenta,white,black, etc..
 
@@ -696,7 +696,7 @@ alert, emerg.
 
 =item B<IMPORTANT>
 
-Bool. Even if --quiet is specified, output this message.  Use sparringly, and yes,
+Bool. Even if --quiet is specified, output this message.  Use sparingly, and yes,
 it is case sensitive.  You need to yell at it for it to yell at your users.
 
 =item B<stderr>
@@ -715,7 +715,7 @@ Integer.  The number of newlines before this output.
 
 =item B<kv>
 
-Bool.  The array of messsages is actually a key/value pair, this implements special coloring and
+Bool.  The array of messages is actually a key/value pair, this implements special coloring and
 expects the number of messages to be even.
 
     output(qw(a 1 b 2));
