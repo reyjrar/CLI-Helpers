@@ -7,6 +7,7 @@ use warnings;
 use File::Basename;
 use Getopt::Long qw(:config pass_through);
 use IPC::Run3;
+use List::Util qw(first);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sys::Syslog qw(:standard);
 use Term::ANSIColor 2.01 qw(color colored colorstrip);
@@ -74,6 +75,7 @@ From CLI::Helpers:
     --syslog-facility   Default "local0"
     --syslog-tag        The program name, default is the script name
     --syslog-debug      Enable debug messages to syslog if in use, default false
+    --tags              (Multi) Show only output with the designated tags
 =cut
 
 my %opt = ();
@@ -89,6 +91,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'syslog-facility:s',
         'syslog-tag:s',
         'syslog-debug!',
+        'tags:s@',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -97,11 +100,18 @@ my $data_fh = undef;
 if( exists $opt{'data-file'} ) {
     eval {
         open($data_fh, '>', $opt{'data-file'}) or die "data file unwritable: $!";
-    };
-    if( my $error = $@ ) {
+        1;
+    } or do {
+        my $error = $@;
         output({color=>'red',stderr=>1}, "Attempted to write to $opt{'data-file'} failed: $!");
-    }
+    };
 }
+
+my @tags = (
+    $opt{tags} ? @{ $opt{tags} } : (),
+    $opt{debug} ? 'debug' : (),
+);
+
 
 # Set defaults
 my %DEF = (
@@ -115,21 +125,21 @@ my %DEF = (
     SYSLOG_TAG      => exists $opt{'syslog-tag'}      && length $opt{'syslog-tag'}      ? $opt{'syslog-tag'} : basename($0),
     SYSLOG_FACILITY => exists $opt{'syslog-facility'} && length $opt{'syslog-facility'} ? $opt{'syslog-facility'} : 'local0',
     SYSLOG_DEBUG    => $opt{'syslog-debug'}  || 0,
+    TAGS            => { map { $_ => 1 } @tags },
 );
 debug({color=>'magenta'}, "CLI::Helpers Definitions");
 debug_var(\%DEF);
 
 # Setup the Syslog Subsystem
 if( $DEF{SYSLOG} ) {
-    my $syslog_ok = eval {
+    eval {
         openlog($DEF{SYSLOG_TAG}, 'ndelay,pid', $DEF{SYSLOG_FACILITY});
         1;
-    };
-    my $error = $@;
-    if( !$syslog_ok ) {
+    } or do {
+        my $error = $@;
         output({stderr=>1,color=>'red'}, "CLI::Helpers could not open syslog: $error");
         $DEF{SYSLOG}=0;
-    }
+    };
 }
 
 my $TERM = undef;
@@ -207,6 +217,12 @@ sub output {
 
     # Return unless we have something to work with;
     return unless @_;
+
+    # Check tags
+    if( keys %{ $DEF{TAGS} } and not exists $DEF{TAGS}->{all} ) {
+        return unless exists $opts->{tags};
+        return unless first { exists $DEF{TAGS}->{$_} } @{ $opts->{tags} };
+    }
 
     # Input/output Arrays
     my @input = map { my $x=$_; chomp($x) if defined $x; $x; } @_;
@@ -314,6 +330,13 @@ sub debug {
     # Smarter handling of debug output
     return unless $DEF{DEBUG};
 
+    # Add the debug tag
+    if( exists $opts->{tags} ) {
+        push @{ $opts->{tags} }, 'debug';
+    }
+    else {
+        $opts->{tags} = [qw(debug)];
+    }
     # Check against caller class
     my $package = exists $opts->{_caller_package} ? $opts->{_caller_package} : (caller)[0];
     return unless lc $DEF{DEBUG_CLASS} eq 'all' || $package eq $DEF{DEBUG_CLASS};
@@ -671,7 +694,8 @@ that output.  The hash may contain the following options:
 =item B<sticky>
 
 Any lines tagged with 'sticky' will be replayed at the end program's end.  This
-is to allow a developer to ensure message are seen at the termination of the program.
+is to allow a developer to ensure message are seen at the termination of the
+program.
 
 =item B<color>
 
@@ -681,18 +705,18 @@ String. Using Term::ANSIColor for output, use the color designated, i.e.:
 
 =item B<level>
 
-Integer. For verbose output, this is basically the number of -v's necessary to see
-this output.
+Integer. For verbose output, this is basically the number of -v's necessary to
+see this output.
 
 =item B<syslog_level>
 
-String.  Can be any valid syslog_level as a string: debug, info, notice, warning, err, crit,
-alert, emerg.
+String.  Can be any valid syslog_level as a string: debug, info, notice,
+warning, err, crit, alert, emerg.
 
 =item B<no_syslog>
 
-Bool.  Even if the user specifies --syslog, these lines will not go to the syslog destination.
-alert, emerg.
+Bool.  Even if the user specifies --syslog, these lines will not go to the
+syslog destination.  alert, emerg.
 
 =item B<IMPORTANT>
 
@@ -701,13 +725,13 @@ it is case sensitive.  You need to yell at it for it to yell at your users.
 
 =item B<stderr>
 
-Bool. Use STDERR for this message instead of STDOUT.  The advantage to using this is the
-"quiet" option will silence these messages as well.
+Bool. Use STDERR for this message instead of STDOUT.  The advantage to using
+this is the "quiet" option will silence these messages as well.
 
 =item B<indent>
 
-Integer.  This will indent by 2 times the specified integer the next string.  Useful
-for creating nested output in a script.
+Integer.  This will indent by 2 times the specified integer the next string.
+Useful for creating nested output in a script.
 
 =item B<clear>
 
@@ -733,9 +757,16 @@ Using kv, the output will look like this:
 
 =item B<data>
 
-Bool.  Lines tagged with "data => 1" will be output to the data-file if a user specifies it.  This allows
-you to provide header/footers and inline context for the main CLI, but output just the data to a file for
-piping elsewhere.
+Bool.  Lines tagged with "data => 1" will be output to the data-file if a user
+specifies it.  This allows you to provide header/footers and inline context for
+the main CLI, but output just the data to a file for piping elsewhere.
+
+=item B<tags>
+
+Array ref.  Lines tagged with "tags => [qw(a b c)]" will be available for
+selective output.  If the user specifies C<--tags a>, they'll see only lines
+tagged with 'a'.  If the user doesn't specify C<--tags>, no output filtering is
+performed.  Additionally, there's a special tag 'all' that shows all output.
 
 =back
 
