@@ -211,6 +211,7 @@ This module uses [Sub::Exporter](https://metacpan.org/pod/Sub::Exporter) for fle
 From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
+    --tags              A comma separated list of tags to display
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
@@ -220,11 +221,54 @@ From CLI::Helpers:
     --syslog-facility   Default "local0"
     --syslog-tag        The program name, default is the script name
     --syslog-debug      Enable debug messages to syslog if in use, default false
+    --nopaste           Use App::Nopaste to paste output to configured paste service
+    --nopaste-service   Named App::Nopaste service to target, defaults to Shadowcat
+
+# NOPASTE
+
+This is optional and will only work if you have [App::Nopaste](https://metacpan.org/pod/App::Nopaste) installed.  If
+you just specify `--nopaste`, any output that would be displayed to the screen
+is submitted to the [App::Nopaste::Service::Shadowcat](https://metacpan.org/pod/App::Nopaste::Service::Shadowcat) paste bin.  This
+paste service is pretty simple, but works reliably.
+
+During the `END` block, the output is submitted and the URL of the paste is
+returned to the user.
 
 # OUTPUT OPTIONS
 
 Every output function takes an optional HASH reference containing options for
 that output.  The hash may contain the following options:
+
+- **tag**
+
+    Add a keyword to tag output with.  The user may then specify `--tags
+    keyword1,keyword2` to only view output at the appropriate level.  This option
+    will affect `data-file` and `syslog` output.  The output filter requires both
+    the presence of the `tag` in the output options **and** the user to specify
+    `--tags` on the command line.
+
+    Consider a script, `status.pl`:
+
+        output("System Status: Normal")
+        output({tag=>'foo'}, "Component Foo: OK");
+        output({tag=>'bar'}, "Component Bar: OK");
+
+    If an operator runs:
+
+        $ status.pl
+        System Status: Normal
+        Component Foo: OK
+        Component Bar: OK
+
+        $ status.pl --tags bar
+        System Status: Normal
+        Component Bar: OK
+
+        $ status.pl --tags foo
+        System Status: Normal
+        Component Foo: OK
+
+    This could be helpful for selecting one or more pertinent tags to display.
 
 - **sticky**
 
@@ -301,7 +345,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2018 by Brad Lhotsky.
+This software is Copyright (c) 2019 by Brad Lhotsky.
 
 This is free software, licensed under:
 

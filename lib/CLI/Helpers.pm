@@ -1,12 +1,14 @@
-# ABSTRACT: Subroutines for making simple command line scripts
 package CLI::Helpers;
+# ABSTRACT: Subroutines for making simple command line scripts
+# RECOMMEND PREREQ: App::Nopaste
 
 use strict;
 use warnings;
 
+use Capture::Tiny qw(capture);
 use File::Basename;
 use Getopt::Long qw(:config pass_through);
-use IPC::Run3;
+use Module::Load qw(load);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sys::Syslog qw(:standard);
 use Term::ANSIColor 2.01 qw(color colored colorstrip);
@@ -17,7 +19,7 @@ use YAML;
 # VERSION
 
 our $_OPTIONS_PARSED;
-
+my  @ORIG_ARGS = @ARGV;
 
 { # Work-around for CPAN Smoke Test Failure
     # Details: http://perldoc.perl.org/5.8.9/Term/ReadLine.html#CAVEATS
@@ -65,6 +67,7 @@ use Sub::Exporter -setup => {
 From CLI::Helpers:
 
     --data-file         Path to a file to write lines tagged with 'data => 1'
+    --tags              A comma separated list of tags to display
     --color             Boolean, enable/disable color, default use git settings
     --verbose           Incremental, increase verbosity (Alias is -v)
     --debug             Show developer output
@@ -74,6 +77,19 @@ From CLI::Helpers:
     --syslog-facility   Default "local0"
     --syslog-tag        The program name, default is the script name
     --syslog-debug      Enable debug messages to syslog if in use, default false
+    --nopaste           Use App::Nopaste to paste output to configured paste service
+    --nopaste-service   Named App::Nopaste service to target, defaults to Shadowcat
+
+=head1 NOPASTE
+
+This is optional and will only work if you have L<App::Nopaste> installed.  If
+you just specify C<--nopaste>, any output that would be displayed to the screen
+is submitted to the L<App::Nopaste::Service::Shadowcat> paste bin.  This
+paste service is pretty simple, but works reliably.
+
+During the C<END> block, the output is submitted and the URL of the paste is
+returned to the user.
+
 =cut
 
 my %opt = ();
@@ -89,6 +105,9 @@ if( !defined $_OPTIONS_PARSED ) {
         'syslog-facility:s',
         'syslog-tag:s',
         'syslog-debug!',
+        'tags:s',
+        'nopaste',
+        'nopaste-service:s@',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -115,6 +134,9 @@ my %DEF = (
     SYSLOG_TAG      => exists $opt{'syslog-tag'}      && length $opt{'syslog-tag'}      ? $opt{'syslog-tag'} : basename($0),
     SYSLOG_FACILITY => exists $opt{'syslog-facility'} && length $opt{'syslog-facility'} ? $opt{'syslog-facility'} : 'local0',
     SYSLOG_DEBUG    => $opt{'syslog-debug'}  || 0,
+    TAGS            => $opt{tags} ? { map { $_ => 1 } split /,/, $opt{tags} } : undef,
+    NOPASTE         => $opt{nopaste} || 0,
+    NOPASTE_SERVICE => $opt{'nopaste-service'} || [ "Shadowcat" ],
 );
 debug({color=>'magenta'}, "CLI::Helpers Definitions");
 debug_var(\%DEF);
@@ -134,13 +156,50 @@ if( $DEF{SYSLOG} ) {
 
 my $TERM = undef;
 my @STICKY = ();
+my @NOPASTE = ();
+my %TAGS    = ();
+
+if( $DEF{NOPASTE} ) {
+    eval {
+        load 'App::Nopaste';
+        1;
+    } or do {
+        $DEF{NOPASTE} = 0;
+        output({stderr=>1,color=>'red',sticky=>1},
+            'App::Nopaste is not installed, please cpanm App::Nopaste for --nopaste support',
+        );
+    };
+}
 
 # Allow some messages to be fired at the end the of program
 END {
+    # Show discovered tags
+    if( keys %TAGS ) {
+        output({color=>'cyan',stderr=>1},
+            sprintf "# Tags discovered: %s",
+                join(', ', map { "$_=$TAGS{$_}" } sort keys %TAGS)
+        );
+    }
+    # Show Sticky Output
     if(@STICKY) {
         foreach my $args (@STICKY) {
             output(@{ $args });
         }
+    }
+    # Do the Nopaste
+    if( @NOPASTE ) {
+        my $command_string = join(" ", $0, @ORIG_ARGS);
+        unshift @NOPASTE, "\$ $command_string";
+        my %paste = (
+            text => join("\n", @NOPASTE),
+            summary => $command_string,
+            desc    => $command_string,
+            services => $DEF{NOPASTE_SERVICE},
+        );
+        debug_var(\%paste);
+        output({color=>'cyan',stderr=>1}, "# NoPaste: "
+            . App::Nopaste->nopaste(%paste)
+        );
     }
     closelog() if $DEF{SYSLOG};
 }
@@ -162,18 +221,15 @@ using color of 0 if color is not enabled.
 
 sub git_color_check {
     my @cmd = qw(git config --global --get color.ui);
-    my($out,$err);
-    eval {
-        run3(\@cmd, undef, \$out, \$err);
+    my($stdout,$stderr,$rc) = capture {
+        system @cmd;
     };
-    if( $@  || $err ) {
-        my $error = defined $err ? $err : '';
-        $error   .= defined $@   ? " $@" : '';
-        debug("git_color_check error: $error");
+    if( $rc != 0 ) {
+        debug("git_color_check error: $stderr");
         return 0;
     }
-    debug("git_color_check out: $out");
-    if( $out =~ /auto/ || $out =~ /true/ ) {
+    debug("git_color_check out: $stdout");
+    if( $stdout =~ /auto/ || $stdout =~ /true/ ) {
         return 1;
     }
     return 0;
@@ -234,6 +290,13 @@ sub output {
         @output = map { defined $color ? colorize($color, $_) : $_; } @input;
     }
 
+    # If tagged, we only output if the tag is requested
+    if( $DEF{TAGS} && exists $opts->{tag} ) {
+        # Skip this altogether
+        $TAGS{$opts->{tag}} ||= 0;
+        $TAGS{$opts->{tag}}++;
+        return unless $DEF{TAGS}->{$opts->{tag}};
+    }
     # Out to the console
     if( !$DEF{QUIET} || (exists $opts->{IMPORTANT} && $opts->{IMPORTANT})) {
         my $out_handle = exists $opts->{stderr} && $opts->{stderr} ? \*STDERR : \*STDOUT;
@@ -278,6 +341,9 @@ sub output {
         delete $o{$_} for grep { exists $o{$_} } qw(sticky data);
         $o{no_syslog} = 1;
         push @STICKY, [ \%o, @input ];
+    }
+    if( $DEF{NOPASTE} ) {
+        push @NOPASTE, @input;
     }
 }
 
@@ -667,6 +733,37 @@ Every output function takes an optional HASH reference containing options for
 that output.  The hash may contain the following options:
 
 =over 4
+
+=item B<tag>
+
+Add a keyword to tag output with.  The user may then specify C<--tags
+keyword1,keyword2> to only view output at the appropriate level.  This option
+will affect C<data-file> and C<syslog> output.  The output filter requires both
+the presence of the C<tag> in the output options B<and> the user to specify
+C<--tags> on the command line.
+
+Consider a script, C<status.pl>:
+
+    output("System Status: Normal")
+    output({tag=>'foo'}, "Component Foo: OK");
+    output({tag=>'bar'}, "Component Bar: OK");
+
+If an operator runs:
+
+    $ status.pl
+    System Status: Normal
+    Component Foo: OK
+    Component Bar: OK
+
+    $ status.pl --tags bar
+    System Status: Normal
+    Component Bar: OK
+
+    $ status.pl --tags foo
+    System Status: Normal
+    Component Foo: OK
+
+This could be helpful for selecting one or more pertinent tags to display.
 
 =item B<sticky>
 
