@@ -78,7 +78,7 @@ From CLI::Helpers:
     --syslog-tag        The program name, default is the script name
     --syslog-debug      Enable debug messages to syslog if in use, default false
     --nopaste           Use App::Nopaste to paste output to configured paste service
-    --nopaste-service   Named App::Nopaste service to target, defaults to Shadowcat
+    --nopaste-service   Comma-separated App::Nopaste service, defaults to Shadowcat
 
 =head1 NOPASTE
 
@@ -107,7 +107,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'syslog-debug!',
         'tags:s',
         'nopaste',
-        'nopaste-service:s@',
+        'nopaste-service:s',
     );
     $_OPTIONS_PARSED = 1;
 }
@@ -136,7 +136,7 @@ my %DEF = (
     SYSLOG_DEBUG    => $opt{'syslog-debug'}  || 0,
     TAGS            => $opt{tags} ? { map { $_ => 1 } split /,/, $opt{tags} } : undef,
     NOPASTE         => $opt{nopaste} || 0,
-    NOPASTE_SERVICE => $opt{'nopaste-service'} || [ "Shadowcat" ],
+    NOPASTE_SERVICE => $opt{'nopaste-service'},
 );
 debug({color=>'magenta'}, "CLI::Helpers Definitions");
 debug_var(\%DEF);
@@ -194,7 +194,9 @@ END {
             text => join("\n", @NOPASTE),
             summary => $command_string,
             desc    => $command_string,
-            services => $DEF{NOPASTE_SERVICE},
+            services => $DEF{NOPASTE_SERVICE}  ? [ split /,/, $DEF{NOPASTE_SERVICE} ]
+                      : $ENV{NOPASTE_SERVICES} ? [ split /,/, $ENV{NOPASTE_SERVICES} ]
+                      :  ['Shadowcat'],
         );
         debug_var(\%paste);
         output({color=>'cyan',stderr=>1}, "# NoPaste: "
