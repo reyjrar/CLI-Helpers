@@ -78,6 +78,7 @@ From CLI::Helpers:
     --syslog-tag        The program name, default is the script name
     --syslog-debug      Enable debug messages to syslog if in use, default false
     --nopaste           Use App::Nopaste to paste output to configured paste service
+    --nopaste-public    Defaults to false, specify to use public paste services
     --nopaste-service   Comma-separated App::Nopaste service, defaults to Shadowcat
 
 =head1 NOPASTE
@@ -107,6 +108,7 @@ if( !defined $_OPTIONS_PARSED ) {
         'syslog-debug!',
         'tags:s',
         'nopaste',
+        'nopaste-public',
         'nopaste-service:s',
     );
     $_OPTIONS_PARSED = 1;
@@ -190,18 +192,29 @@ END {
     if( @NOPASTE ) {
         my $command_string = join(" ", $0, @ORIG_ARGS);
         unshift @NOPASTE, "\$ $command_string";
+        # Figure out what services to use
+        my $services = $DEF{NOPASTE_SERVICE}  ? [ split /,/, $DEF{NOPASTE_SERVICE} ]
+                     : $ENV{NOPASTE_SERVICES} ? [ split /,/, $ENV{NOPASTE_SERVICES} ]
+                     :  undef;
         my %paste = (
-            text => join("\n", @NOPASTE),
-            summary => $command_string,
-            desc    => $command_string,
-            services => $DEF{NOPASTE_SERVICE}  ? [ split /,/, $DEF{NOPASTE_SERVICE} ]
-                      : $ENV{NOPASTE_SERVICES} ? [ split /,/, $ENV{NOPASTE_SERVICES} ]
-                      :  ['Shadowcat'],
+            text     => join("\n", @NOPASTE),
+            summary  => $command_string,
+            desc     => $command_string,
+            # Default to a Private Paste
+            private  => $opt{'nopaste-public'} ? 0 : 1,
         );
         debug_var(\%paste);
-        output({color=>'cyan',stderr=>1}, "# NoPaste: "
-            . App::Nopaste->nopaste(%paste)
-        );
+        if( $services ) {
+            output({color=>'cyan',stderr=>1}, "# NoPaste: "
+                . App::Nopaste->nopaste(%paste, services => $services)
+            );
+        }
+        else {
+            output({color=>'red',stderr=>1,clear=>1},
+                "!! In order to use --nopaste, you need to your environment variable",
+                "!! NOPASTE_SERVICES or pass --nopaste-service, e.g.:",
+                "!!   export NOPASTE_SERVICES=Shadowcat,PastebinCom");
+        }
     }
     closelog() if $DEF{SYSLOG};
 }
@@ -276,6 +289,14 @@ sub output {
     # Determine indentation
     my $indent = exists $opts->{indent} ? " "x(2*$opts->{indent}) : '';
 
+    # If tagged, we only output if the tag is requested
+    if( $DEF{TAGS} && exists $opts->{tag} ) {
+        # Skip this altogether
+        $TAGS{$opts->{tag}} ||= 0;
+        $TAGS{$opts->{tag}}++;
+        return unless $DEF{TAGS}->{$opts->{tag}};
+    }
+
     # Determine if we're doing Key Value Pairs
     my $DO_KV = (scalar(@input) % 2 == 0 ) && (exists $opts->{kv} && $opts->{kv} == 1) ? 1 : 0;
 
@@ -292,13 +313,6 @@ sub output {
         @output = map { defined $color ? colorize($color, $_) : $_; } @input;
     }
 
-    # If tagged, we only output if the tag is requested
-    if( $DEF{TAGS} && exists $opts->{tag} ) {
-        # Skip this altogether
-        $TAGS{$opts->{tag}} ||= 0;
-        $TAGS{$opts->{tag}}++;
-        return unless $DEF{TAGS}->{$opts->{tag}};
-    }
     # Out to the console
     if( !$DEF{QUIET} || (exists $opts->{IMPORTANT} && $opts->{IMPORTANT})) {
         my $out_handle = exists $opts->{stderr} && $opts->{stderr} ? \*STDERR : \*STDOUT;
@@ -345,7 +359,7 @@ sub output {
         push @STICKY, [ \%o, @input ];
     }
     if( $DEF{NOPASTE} ) {
-        push @NOPASTE, @input;
+        push @NOPASTE, map { $indent . colorstrip($_) } @output;
     }
 }
 
