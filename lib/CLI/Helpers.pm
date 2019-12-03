@@ -23,9 +23,6 @@ my @ORIG_ARGS      = @ARGV;
 my $COPY_ARGV      = 0;
 my $INIT_AT_IMPORT = 1;
 
-# Wrap import
-wrap 'import', post => \&_after_import;
-
 { # Work-around for CPAN Smoke Test Failure
     # Details: http://perldoc.perl.org/5.8.9/Term/ReadLine.html#CAVEATS
     open( my $FH, '<', "/dev/tty" )
@@ -117,6 +114,30 @@ sub _global_argv { $COPY_ARGV  = 0; return 1 }
 sub _delay_argv  { $INIT_AT_IMPORT = 0; return 1 }
 sub _at_import   { $INIT_AT_IMPORT = 1; return 1 }
 
+# Wrap import
+wrap 'import',
+    pre  => \&_before_import,
+    post => \&_after_import;
+
+sub _before_import {
+    my @parameters = @_;
+    my ($package)  = caller(0);
+
+    # Skip initialization at import by default when
+    # not used in the main package
+    $INIT_AT_IMPORT = 0 if $package ne 'main';
+
+    # Unmodified
+    return @parameters;
+}
+
+sub _after_import {
+    my @return_values = @_;
+    cli_helpers_initialize() if $INIT_AT_IMPORT;
+    return @return_values;
+}
+
+
 =head1 ARGS
 
 From CLI::Helpers:
@@ -191,11 +212,6 @@ sub _open_data_file {
     };
 }
 
-sub _after_import {
-    my @args = @_;
-    cli_helpers_initialize() if $INIT_AT_IMPORT;
-    return @args;
-}
 
 # Set defaults
 my %DEF     = ();
