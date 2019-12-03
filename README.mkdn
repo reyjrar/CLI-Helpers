@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 1.6
+version 1.7
 
 # SYNOPSIS
 
@@ -81,6 +81,49 @@ enables pass-through, so you can still use your own argument parsing routines or
 Getopt::Long in your script.
 
 # FUNCTIONS
+
+## cli\_helpers\_initialize
+
+This is called automatically at import time, or if `delay_argv` is specified,
+it'll be run the first time a definition is needed, usually the first call to
+`output()`.  If called automatically, it will operate on `@ARGV`.  You can optionally pass
+an array reference to this function and it'll operate that instead.
+
+In most cases, you don't need to call this function directly.  It must be
+explicitly requested in the import.
+
+    use CLI::Helpers qw( :output delay_argv cli_helpers_initialize );
+
+    ...
+    # I want access to ARGV before CLI::Helpers;
+    my %opts = get_important_things_from(\@ARGV);
+
+    # Now, let CLI::Helpers take the rest
+    cli_helpers_initialize();
+    output("ready");
+
+Alternatively, you could:
+
+    use CLI::Helpers qw( :output delay_argv );
+
+    ...
+    # I want access to ARGV before CLI::Helpers;
+    my %opts = get_important_things_from(\@ARGV);
+
+    # Now, let CLI::Helpers take the rest, implicit
+    #   call to cli_helpers_initialize()
+    output("ready");
+
+Or if you'd prefer not to touch `@ARGV` at all, you pass in an array ref:
+
+    use CLI::Helpers qw( :output cli_helpers_initialize delay_argv );
+
+    my ($opt,$usage) = describe_option( ... );
+
+    cli_helpers_initialize([ qw( --verbose ) ]);
+
+    output("ready?");
+    verbose("you bet I am");
 
 ## def
 
@@ -205,6 +248,38 @@ This module uses [Sub::Exporter](https://metacpan.org/pod/Sub::Exporter) for fle
 
     prompt()    Wrapper which mimics IO::Prompt a bit
     pwprompt()  Wrapper to get sensitive data
+
+## Import Time Configurations
+
+It's possible to change the behavior of the import process.
+
+- **global\_argv**
+
+    Currently the default behavior.  This will operate on and remove items from `@ARGV`.
+
+        use CLI::Helpers qw( :output global_argv );
+
+- **copy\_argv**
+
+    Instead of messing with `@ARGV`, operate on a copy of `@ARGV`.
+
+        use CLI::Helpers qw( :output copy_argv );
+
+- **at\_import**
+
+    Currently the default behavior.  This causes the `@ARGV` processing to happen
+    at import time.  This is usually OK for scripts, but for use in libraries, it
+    may be undesirable.  It's also possible that you'd like to process `@ARGV`
+    first.  In both those cases, it's possible to use **delay\_argv** or
+    **copy\_argv**.
+
+- **delay\_argv**
+
+    By default, `@ARGV` processing will happen at import time.  This is usually
+    desirable for most scripts.  Use of [CLI::Helpers](https://metacpan.org/pod/CLI::Helpers) inside of libraries may
+    wish to delay messing with `@ARGV` until it's needed.
+
+        use CLI::Helpers qw( :output delay_argv );
 
 # ARGS
 

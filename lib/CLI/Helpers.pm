@@ -19,9 +19,9 @@ use YAML;
 
 # VERSION
 
-my @ORIG_ARGS  = @ARGV;
-my $COPY_ARGV  = 0;
-my $DELAY_ARGV = 0;
+my @ORIG_ARGS      = @ARGV;
+my $COPY_ARGV      = 0;
+my $INIT_AT_IMPORT = 1;
 
 # Wrap import
 wrap 'import', post => \&_after_import;
@@ -73,6 +73,14 @@ Instead of messing with C<@ARGV>, operate on a copy of C<@ARGV>.
 
     use CLI::Helpers qw( :output copy_argv );
 
+=item B<at_import>
+
+Currently the default behavior.  This causes the C<@ARGV> processing to happen
+at import time.  This is usually OK for scripts, but for use in libraries, it
+may be undesirable.  It's also possible that you'd like to process C<@ARGV>
+first.  In both those cases, it's possible to use B<delay_argv> or
+B<copy_argv>.
+
 =item B<delay_argv>
 
 By default, C<@ARGV> processing will happen at import time.  This is usually
@@ -100,12 +108,14 @@ use Sub::Exporter -setup => {
         copy_argv   => \'_copy_argv',
         global_argv => \'_global_argv',
         delay_argv  => \'_delay_argv',
+        at_import   => \'_at_import',
     ],
 };
 
 sub _copy_argv   { $COPY_ARGV  = 1; return 1 }
 sub _global_argv { $COPY_ARGV  = 0; return 1 }
-sub _delay_argv  { $DELAY_ARGV = 1; return 1 }
+sub _delay_argv  { $INIT_AT_IMPORT = 0; return 1 }
+sub _at_import   { $INIT_AT_IMPORT = 1; return 1 }
 
 =head1 ARGS
 
@@ -140,6 +150,7 @@ returned to the user.
 
 my %OPT = ();
 sub _parse_options {
+    my ($opt_ref) = @_;
     my @opt_spec = qw(
         color!
         verbose|v+
@@ -156,7 +167,16 @@ sub _parse_options {
         nopaste-public
         nopaste-service:s
     );
-    my $argv = $COPY_ARGV ? [ @ARGV ] : \@ARGV;
+
+    my $argv;
+    if( defined $opt_ref && is_arrayref($opt_ref) ) {
+        # If passed an argv array, use that
+        $argv = $COPY_ARGV ? [ @{ $opt_ref } ] : $opt_ref;
+    }
+    else {
+        # Otherwise, work on @ARGV
+        $argv = $COPY_ARGV ? [ @ARGV ] : \@ARGV;
+    }
     GetOptionsFromArray($argv, \%OPT, @opt_spec );
 }
 
@@ -173,14 +193,14 @@ sub _open_data_file {
 
 sub _after_import {
     my @args = @_;
-    cli_helpers_initialize() unless $DELAY_ARGV;
+    cli_helpers_initialize() if $INIT_AT_IMPORT;
     return @args;
 }
 
 # Set defaults
-my %DEF = ();
-my $TERM = undef;
-my @STICKY = ();
+my %DEF     = ();
+my $TERM    = undef;
+my @STICKY  = ();
 my @NOPASTE = ();
 my %TAGS    = ();
 
@@ -188,7 +208,8 @@ my %TAGS    = ();
 
 This is called automatically at import time, or if C<delay_argv> is specified,
 it'll be run the first time a definition is needed, usually the first call to
-C<output()>.
+C<output()>.  If called automatically, it will operate on C<@ARGV>.  You can optionally pass
+an array reference to this function and it'll operate that instead.
 
 In most cases, you don't need to call this function directly.  It must be
 explicitly requested in the import.
@@ -216,10 +237,23 @@ Alternatively, you could:
     #   call to cli_helpers_initialize()
     output("ready");
 
+Or if you'd prefer not to touch C<@ARGV> at all, you pass in an array ref:
+
+    use CLI::Helpers qw( :output cli_helpers_initialize delay_argv );
+
+    my ($opt,$usage) = describe_option( ... );
+
+    cli_helpers_initialize([ qw( --verbose ) ]);
+
+    output("ready?");
+    verbose("you bet I am");
+
 =cut
 
 sub cli_helpers_initialize {
-    _parse_options();
+    my ($argv) = @_;
+
+    _parse_options($argv);
     _open_data_file() if $OPT{'data-file'};
 
     # Initialize Global Definitions
