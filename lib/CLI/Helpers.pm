@@ -8,7 +8,6 @@ use warnings;
 use Capture::Tiny qw(capture);
 use File::Basename;
 use Getopt::Long qw(GetOptionsFromArray :config pass_through);
-use Hook::LexWrap qw(wrap);
 use Module::Load qw(load);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sys::Syslog qw(:standard);
@@ -19,9 +18,11 @@ use YAML;
 
 # VERSION
 
-my @ORIG_ARGS      = @ARGV;
-my $COPY_ARGV      = 0;
-my $INIT_AT_IMPORT = 1;
+# Capture ARGV at Load
+my @ORIG_ARGS;
+BEGIN {
+    @ORIG_ARGS = @ARGV;
+}
 
 { # Work-around for CPAN Smoke Test Failure
     # Details: http://perldoc.perl.org/5.8.9/Term/ReadLine.html#CAVEATS
@@ -55,14 +56,7 @@ This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
 
 It's possible to change the behavior of the import process.
 
-
 =over 2
-
-=item B<global_argv>
-
-Currently the default behavior.  This will operate on and remove items from C<@ARGV>.
-
-    use CLI::Helpers qw( :output global_argv );
 
 =item B<copy_argv>
 
@@ -70,73 +64,84 @@ Instead of messing with C<@ARGV>, operate on a copy of C<@ARGV>.
 
     use CLI::Helpers qw( :output copy_argv );
 
-=item B<at_import>
+=item B<preprocess_argv>
 
-Currently the default behavior.  This causes the C<@ARGV> processing to happen
-at import time.  This is usually OK for scripts, but for use in libraries, it
-may be undesirable.  It's also possible that you'd like to process C<@ARGV>
-first.  In both those cases, it's possible to use B<delay_argv> or
-B<copy_argv>.
+This causes the C<@ARGV> processing to happen during the C<INIT> phase, after
+import but before runtime. This is the default when being imported from the
+C<main> package. This is usually OK for scripts, but for use in libraries, it may
+be undesirable.
+
+    use CLI::Helpers qw( :output preprocess_argv );
 
 =item B<delay_argv>
 
-By default, C<@ARGV> processing will happen at import time.  This is usually
-desirable for most scripts.  Use of L<CLI::Helpers> inside of libraries may
-wish to delay messing with C<@ARGV> until it's needed.
+This causes the C<@ARGV> processing to happen when the first call to a function
+needing it run, usually an C<output()> call. This is the default anytime
+L<CLI::Helpers> is imported from namespace that isn't C<main>.
 
     use CLI::Helpers qw( :output delay_argv );
-
 
 =back
 
 =cut
 
-use Sub::Exporter -setup => {
-    exports => [qw(
-        output verbose debug debug_var override
-        prompt confirm text_input menu pwprompt
-        cli_helpers_initialize
-    )],
-    groups => {
-        input  => [qw(prompt menu text_input confirm pwprompt)],
-        output => [qw(output verbose debug debug_var)],
-    },
-    collectors => [
-        copy_argv   => \'_copy_argv',
-        global_argv => \'_global_argv',
-        delay_argv  => \'_delay_argv',
-        at_import   => \'_at_import',
-    ],
-};
+require Exporter;
+our @ISA = qw(Exporter);
 
-sub _copy_argv   { $COPY_ARGV  = 1; return 1 }
-sub _global_argv { $COPY_ARGV  = 0; return 1 }
-sub _delay_argv  { $INIT_AT_IMPORT = 0; return 1 }
-sub _at_import   { $INIT_AT_IMPORT = 1; return 1 }
+my @output_tags = qw(output verbose debug debug_var cli_helpers_initialize);
+my @input_tags  = qw(prompt menu text_input confirm pwprompt);
 
-# Wrap import
-wrap 'import',
-    pre  => \&_before_import,
-    post => \&_after_import;
+our @EXPORT_OK = ( @output_tags, @input_tags );
+our %EXPORT_TAGS = (
+    all    => [@output_tags,@input_tags],
+    input  => \@input_tags,
+    output => \@output_tags,
+);
 
-sub _before_import {
-    my @parameters = @_;
-    my ($package)  = caller(0);
+my $ARGV_AT_INIT    = 1;
+my $COPY_ARGV       = 0;
+our $_init_complete = 0;
 
-    # Skip initialization at import by default when
-    # not used in the main package
-    $INIT_AT_IMPORT = 0 if $package ne 'main';
+sub import {
+    my (@args) = @_;
 
-    # Unmodified
-    return @parameters;
+    my $explicit_argv = 0;
+    my @import = ();
+    # We need to process the config options
+    foreach my $arg ( @args ) {
+        if( $arg eq 'delay_argv' ) {
+            $ARGV_AT_INIT = 0;
+            $explicit_argv = 1;
+        }
+        elsif( $arg eq 'preprocess_argv' ) {
+            $ARGV_AT_INIT = 1;
+            $explicit_argv = 1;
+        }
+        elsif( $arg eq 'copy_argv' ) {
+            $COPY_ARGV = 1;
+        }
+        # Not a config option, pass through
+        else {
+            push @import, $arg;
+        }
+    }
+    if( !$explicit_argv ) {
+        my ($package) = caller();
+        $ARGV_AT_INIT = $package eq 'main';
+    }
+
+    CLI::Helpers->export_to_level( 1, @import );
 }
 
-sub _after_import {
-    my @return_values = @_;
-    cli_helpers_initialize() if $INIT_AT_IMPORT;
-    return @return_values;
+{
+    ## no critic (ProhibitNoWarnings)
+    no warnings;
+    INIT {
+        return if $_init_complete++;
+        cli_helpers_initialize() if $ARGV_AT_INIT;
+    }
+    ## use critic
 }
-
 
 =head1 ARGS
 
@@ -169,46 +174,62 @@ returned to the user.
 
 =cut
 
-my %OPT = ();
-sub _parse_options {
-    my ($opt_ref) = @_;
-    my @opt_spec = qw(
-        color!
-        verbose|v+
-        debug
-        debug-class:s
-        quiet
-        data-file:s
-        syslog!
-        syslog-facility:s
-        syslog-tag:s
-        syslog-debug!
-        tags:s
-        nopaste
-        nopaste-public
-        nopaste-service:s
-    );
+{
+    my @argv_original = ();
+    my $parsed_argv = 0;
+    sub _parse_options {
+        my ($opt_ref) = @_;
+        my @opt_spec = qw(
+            color!
+            verbose|v+
+            debug
+            debug-class:s
+            quiet
+            data-file:s
+            syslog!
+            syslog-facility:s
+            syslog-tag:s
+            syslog-debug!
+            tags:s
+            nopaste
+            nopaste-public
+            nopaste-service:s
+        );
 
-    my $argv;
-    if( defined $opt_ref && is_arrayref($opt_ref) ) {
-        # If passed an argv array, use that
-        $argv = $COPY_ARGV ? [ @{ $opt_ref } ] : $opt_ref;
+        my $argv;
+        my %opt;
+        if( defined $opt_ref && is_arrayref($opt_ref) ) {
+            # If passed an argv array, use that
+            $argv = $COPY_ARGV ? [ @{ $opt_ref } ] : $opt_ref;
+        }
+        else {
+            # Ensure multiple calls to cli_helpers_initialize() yield the same results
+            if ( $parsed_argv ) {
+                ## no critic
+                @ARGV = @argv_original;
+                ## use critic
+            }
+            else {
+                @argv_original = @ARGV;
+                $parsed_argv++;
+            }
+            # Operate on @ARGV
+            $argv = $COPY_ARGV ? [ @ARGV ] : \@ARGV;
+        }
+        GetOptionsFromArray($argv, \%opt, @opt_spec );
+        return \%opt;
     }
-    else {
-        # Otherwise, work on @ARGV
-        $argv = $COPY_ARGV ? [ @ARGV ] : \@ARGV;
-    }
-    GetOptionsFromArray($argv, \%OPT, @opt_spec );
 }
 
 my $DATA_HANDLE = undef;
 sub _open_data_file {
+    my $data_file = shift;
     eval {
-        open($DATA_HANDLE, '>', $OPT{'data-file'}) or die "data file unwritable: $!";
+        open($DATA_HANDLE, '>', $data_file) or die "data file unwritable: $!";
         1;
     } or do {
         my $error = $@;
-        output({color=>'red',stderr=>1}, "Attempted to write to $OPT{'data-file'} failed: $!");
+        output({color=>'red',stderr=>1}, "Attempted to write to $data_file failed: $!");
     };
 }
 
@@ -222,28 +243,17 @@ my %TAGS    = ();
 
 =func cli_helpers_initialize
 
-This is called automatically at import time, or if C<delay_argv> is specified,
-it'll be run the first time a definition is needed, usually the first call to
-C<output()>.  If called automatically, it will operate on C<@ARGV>.  You can optionally pass
-an array reference to this function and it'll operate that instead.
+This is called automatically when C<preprocess_argv> is set. By default, it'll
+be run the first time a definition is needed, usually the first call to
+C<output()>.  If called automatically, it will operate on C<@ARGV>.  You can
+optionally pass an array reference to this function and it'll operate that
+instead.
 
 In most cases, you don't need to call this function directly.  It must be
 explicitly requested in the import.
 
 
-    use CLI::Helpers qw( :output delay_argv cli_helpers_initialize );
-
-    ...
-    # I want access to ARGV before CLI::Helpers;
-    my %opts = get_important_things_from(\@ARGV);
-
-    # Now, let CLI::Helpers take the rest
-    cli_helpers_initialize();
-    output("ready");
-
-Alternatively, you could:
-
-    use CLI::Helpers qw( :output delay_argv );
+    use CLI::Helpers qw( :output );
 
     ...
     # I want access to ARGV before CLI::Helpers;
@@ -253,9 +263,22 @@ Alternatively, you could:
     #   call to cli_helpers_initialize()
     output("ready");
 
+Alternatively, you could:
+
+    use CLI::Helpers qw( :output preprocess_argv );
+
+    ...
+    # Since CLI::Helpers opts are stripped from @ARGV,
+    #  Getopt::Long::Descriptive won't complain about extra args
+    my ($opt,$usage) = describe_option( ... );
+
+    # Now, let CLI::Helpers take the rest, implicit
+    #   call to cli_helpers_initialize()
+    output("ready");
+
 Or if you'd prefer not to touch C<@ARGV> at all, you pass in an array ref:
 
-    use CLI::Helpers qw( :output cli_helpers_initialize delay_argv );
+    use CLI::Helpers qw( :output );
 
     my ($opt,$usage) = describe_option( ... );
 
@@ -269,25 +292,26 @@ Or if you'd prefer not to touch C<@ARGV> at all, you pass in an array ref:
 sub cli_helpers_initialize {
     my ($argv) = @_;
 
-    _parse_options($argv);
-    _open_data_file() if $OPT{'data-file'};
+    my $opts = _parse_options($argv);
+    _open_data_file($opts->{'data-file'}) if $opts->{'data-file'};
 
     # Initialize Global Definitions
     %DEF = (
-        DEBUG           => $OPT{debug}   || 0,
-        DEBUG_CLASS     => $OPT{'debug-class'} || 'main',
-        VERBOSE         => $OPT{verbose} || 0,
+        DEBUG           => $opts->{debug}   || 0,
+        DEBUG_CLASS     => $opts->{'debug-class'} || 'main',
+        VERBOSE         => $opts->{verbose} || 0,
         KV_FORMAT       => ': ',
-        QUIET           => $OPT{quiet}   || 0,
-        SYSLOG          => $OPT{syslog}  || 0,
-        SYSLOG_TAG      => exists $OPT{'syslog-tag'}      && length $OPT{'syslog-tag'}      ? $OPT{'syslog-tag'} : basename($0),
-        SYSLOG_FACILITY => exists $OPT{'syslog-facility'} && length $OPT{'syslog-facility'} ? $OPT{'syslog-facility'} : 'local0',
-        SYSLOG_DEBUG    => $OPT{'syslog-debug'}  || 0,
-        TAGS            => $OPT{tags} ? { map { $_ => 1 } split /,/, $OPT{tags} } : undef,
-        NOPASTE         => $OPT{nopaste} || 0,
-        NOPASTE_SERVICE => $OPT{'nopaste-service'},
+        QUIET           => $opts->{quiet}   || 0,
+        SYSLOG          => $opts->{syslog}  || 0,
+        SYSLOG_TAG      => exists $opts->{'syslog-tag'}      && length $opts->{'syslog-tag'}      ? $opts->{'syslog-tag'} : basename($0),
+        SYSLOG_FACILITY => exists $opts->{'syslog-facility'} && length $opts->{'syslog-facility'} ? $opts->{'syslog-facility'} : 'local0',
+        SYSLOG_DEBUG    => $opts->{'syslog-debug'}  || 0,
+        TAGS            => $opts->{tags} ? { map { $_ => 1 } split /,/, $opts->{tags} } : undef,
+        NOPASTE         => $opts->{nopaste} || 0,
+        NOPASTE_SERVICE => $opts->{'nopaste-service'},
+        NOPASTE_PUBLIC  => $opts->{'nopaste-public'},
     );
-    $DEF{COLOR} = $OPT{color} // git_color_check();
+    $DEF{COLOR} = $opts->{color} // git_color_check();
 
     debug("DEFINITIONS");
     debug_var(\%DEF);
@@ -349,7 +373,7 @@ END {
             summary  => $command_string,
             desc     => $command_string,
             # Default to a Private Paste
-            private  => $OPT{'nopaste-public'} ? 0 : 1,
+            private  => $DEF{NOPASTE_PUBLIC} ? 0 : 1,
         );
         debug_var(\%paste);
         if( $services ) {
