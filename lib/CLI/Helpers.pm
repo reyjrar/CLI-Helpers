@@ -67,17 +67,15 @@ Instead of messing with C<@ARGV>, operate on a copy of C<@ARGV>.
 =item B<preprocess_argv>
 
 This causes the C<@ARGV> processing to happen during the C<INIT> phase, after
-import but before runtime. This is the default when being imported from the
-C<main> package. This is usually OK for scripts, but for use in libraries, it may
-be undesirable.
+import but before runtime. This is usually OK for scripts, but for use in
+libraries, it may be undesirable.
 
     use CLI::Helpers qw( :output preprocess_argv );
 
 =item B<delay_argv>
 
 This causes the C<@ARGV> processing to happen when the first call to a function
-needing it run, usually an C<output()> call. This is the default anytime
-L<CLI::Helpers> is imported from namespace that isn't C<main>.
+needing it run, usually an C<output()> call. This is the default.
 
     use CLI::Helpers qw( :output delay_argv );
 
@@ -98,24 +96,21 @@ our %EXPORT_TAGS = (
     output => \@output_tags,
 );
 
-my $ARGV_AT_INIT    = 1;
+my $ARGV_AT_INIT    = 0;
 my $COPY_ARGV       = 0;
 our $_init_complete = 0;
 
 sub import {
     my (@args) = @_;
 
-    my $explicit_argv = 0;
     my @import = ();
     # We need to process the config options
     foreach my $arg ( @args ) {
         if( $arg eq 'delay_argv' ) {
             $ARGV_AT_INIT = 0;
-            $explicit_argv = 1;
         }
         elsif( $arg eq 'preprocess_argv' ) {
             $ARGV_AT_INIT = 1;
-            $explicit_argv = 1;
         }
         elsif( $arg eq 'copy_argv' ) {
             $COPY_ARGV = 1;
@@ -124,10 +119,6 @@ sub import {
         else {
             push @import, $arg;
         }
-    }
-    if( !$explicit_argv ) {
-        my ($package) = caller();
-        $ARGV_AT_INIT = $package eq 'main';
     }
 
     CLI::Helpers->export_to_level( 1, @import );
@@ -183,17 +174,17 @@ returned to the user.
             color!
             verbose|v+
             debug
-            debug-class:s
+            debug-class=s
             quiet
-            data-file:s
+            data-file=s
             syslog!
-            syslog-facility:s
-            syslog-tag:s
+            syslog-facility=s
+            syslog-tag=s
             syslog-debug!
-            tags:s
+            tags=s
             nopaste
             nopaste-public
-            nopaste-service:s
+            nopaste-service=s
         );
 
         my $argv;
