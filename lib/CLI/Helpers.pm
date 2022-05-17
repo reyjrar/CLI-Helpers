@@ -8,6 +8,7 @@ use warnings;
 use Capture::Tiny qw(capture);
 use File::Basename;
 use Getopt::Long qw(GetOptionsFromArray :config pass_through);
+use IO::Interactive qw( is_interactive );
 use Module::Load qw(load);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sys::Syslog qw(:standard);
@@ -398,17 +399,19 @@ using color of 0 if color is not enabled.
 =cut
 
 sub git_color_check {
-    my @cmd = qw(git config --global --get color.ui);
-    my($stdout,$stderr,$rc) = capture {
-        system @cmd;
-    };
-    if( $rc != 0 ) {
-        debug("git_color_check error: $stderr");
-        return 0;
-    }
-    debug("git_color_check out: $stdout");
-    if( $stdout =~ /auto/ || $stdout =~ /true/ ) {
-        return 1;
+    if( is_interactive() ) {
+        my @cmd = qw(git config --global --get color.ui);
+        my($stdout,$stderr,$rc) = capture {
+            system @cmd;
+        };
+        if( $rc != 0 ) {
+            debug("git_color_check error: $stderr");
+            return 0;
+        }
+        debug("git_color_check out: $stdout");
+        if( $stdout =~ /auto/ || $stdout =~ /true/ ) {
+            return 1;
+        }
     }
     return 0;
 }
@@ -871,7 +874,7 @@ Use this module to make writing intelligent command line scripts easier.
     # Ask for a favorite animal
     my $favorite = menu("Select your favorite animal:", [qw(dog cat pig fish otter)]);
 
-Running as test.pl:
+Running:
 
     $ ./test.pl
     Hello, World!
