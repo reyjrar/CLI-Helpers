@@ -840,7 +840,6 @@ sub _get_input {
                 local $|=1;
                 print $prompt;
                 ReadMode('noecho');
-                1 until ReadKey(-1);
                 $text = ReadLine();
                 ReadMode('restore');
                 print "\n";
