@@ -474,7 +474,7 @@ sub output {
         }
     }
     else {
-        @output = map { defined $color ? colorize($color, $_) : $_; } @input;
+        @output = map { colorize($color, $_) } @input;
     }
 
     # Out to the console
