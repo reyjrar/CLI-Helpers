@@ -33,6 +33,11 @@ is( CLI::Helpers::def('VERBOSE'), 1, "ARGV first pass" );
 cli_helpers_initialize();
 is( CLI::Helpers::def('VERBOSE'), 1, "ARGV processing is idempotent" );
 
+# JSON
+cli_helpers_initialize(['--debug']);
+($stdout,$stderr) = capture { debug_var({json => 1}, { foo => 1 }) };
+ok($stdout =~ s/\n//gr eq qq|{"foo":1}|) or diag "GOT: $stdout";
+
 done_testing;
 
 sub run {
@@ -40,6 +45,5 @@ sub run {
     verbose('verbose');
     verbose({level=>2}, "verbose2");
     debug('debug');
-
     output({stderr=>1}, 'normal stderr');
 }

@@ -11,6 +11,7 @@ use Capture::Tiny qw(capture);
 use File::Basename;
 use Getopt::Long qw(GetOptionsFromArray :config pass_through);
 use IO::Interactive qw( is_interactive );
+use JSON::MaybeXS;
 use Module::Load qw(load);
 use Ref::Util qw(is_ref is_arrayref is_hashref);
 use Sys::Syslog qw(:standard);
@@ -583,6 +584,12 @@ sub debug {
 Exported.  Takes an optional hash reference of formatting options.
 Does not output anything unless DEBUG is set.
 
+Passing:
+
+    { json => 1 }
+
+in C<\%opts> will format the output as JSON
+
 =cut
 
 sub debug_var {
@@ -598,7 +605,11 @@ sub debug_var {
             $opts->{$k} = $ref->{$k};
         };
     }
-    debug($opts, Dump shift);
+
+    state $json = JSON->new->utf8->canonical;
+
+    my $var = shift;
+    debug($opts, $opts->{json} ? $json->encode($var) : Dump $var);
 }
 
 =func override( variable => 1 )

@@ -161,6 +161,12 @@ Does not output anything unless DEBUG is set.
 Exported.  Takes an optional hash reference of formatting options.
 Does not output anything unless DEBUG is set.
 
+Passing:
+
+    { json => 1 }
+
+in `\%opts` will format the output as JSON
+
 ## override( variable => 1 )
 
 Exported.  Allows a block of code to override the debug or verbose level.  This
