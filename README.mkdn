@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 2.0
+version 2.1
 
 # SYNOPSIS
 
@@ -193,6 +193,12 @@ Valid options are:
 
     Set as a key with any value and the prompt will turn off echoing responses as well as disabling all
     ReadLine magic.  See also **pwprompt**.
+
+- **clear\_line**
+
+    After prompting for and receiving input, remove that line from the terminal.
+    This only works on interactive terminals, and is useful for things like
+    password prompts.
 
 Returns the text that has passed all validators.
 
@@ -416,7 +422,7 @@ Brad Lhotsky <brad@divisionbyzero.net>
 
 # COPYRIGHT AND LICENSE
 
-This software is Copyright (c) 2022 by Brad Lhotsky.
+This software is Copyright (c) 2024 by Brad Lhotsky.
 
 This is free software, licensed under:
 

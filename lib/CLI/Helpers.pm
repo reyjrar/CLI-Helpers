@@ -666,6 +666,12 @@ A hashref, keys are error messages, values are sub routines that return true whe
 Set as a key with any value and the prompt will turn off echoing responses as well as disabling all
 ReadLine magic.  See also B<pwprompt>.
 
+=item B<clear_line>
+
+After prompting for and receiving input, remove that line from the terminal.
+This only works on interactive terminals, and is useful for things like
+password prompts.
+
 =back
 
 Returns the text that has passed all validators.
@@ -770,7 +776,8 @@ sub pwprompt {
         @more_validate = %$validate;
     }
     return text_input($prompt,
-        noecho   => 1,
+        noecho     => 1,
+        clear_line => 1,
         validate => { "password length can't be zero." => sub { defined && length },
                       @more_validate,
                     },
@@ -827,29 +834,22 @@ sub _get_input {
         # Initialize Term
         $term ||= Term::ReadLine->new($0);
         $args ||= {};
-        if( exists $args->{noecho} ) {
-            my $attrs = $term->Attribs;
-            if( $attrs->{shadow_redisplay} ) {
-                my $restore = $attrs->{redisplay_function};
-                $attrs->{redisplay_function} = $attrs->{shadow_redisplay};
-                $text = $term->readline($prompt);
-                $attrs->{redisplay_function} = $restore;
-            }
-            else {
-                # Disable all the Term ReadLine magic
-                local $|=1;
-                print $prompt;
-                ReadMode('noecho');
-                $text = ReadLine();
-                ReadMode('restore');
-                print "\n";
-                chomp($text);
-            }
+        print "\e[s" if $args->{clear_line}; # Save cursor position
+        if( $args->{noecho} ) {
+            # Disable all the Term ReadLine magic
+            local $|=1;
+            print $prompt;
+            ReadMode('noecho');
+            $text = ReadLine();
+            ReadMode('restore');
+            print "\n";
+            chomp($text);
         }
         else {
             $text = $term->readline($prompt);
             $term->addhistory($text) if length $text && $text =~ /\S/;
         }
+        print "\e[u\e[K" if $args->{clear_line}; # Return to saved position, erase line
     }
     else {
         # Read one line from STDIN
