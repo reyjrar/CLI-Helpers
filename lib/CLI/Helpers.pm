@@ -18,7 +18,7 @@ use Sys::Syslog qw(:standard);
 use Term::ANSIColor 2.01 qw(color colored colorstrip);
 use Term::ReadKey;
 use Term::ReadLine;
-use YAML;
+use YAML::XS ();
 
 # VERSION
 
@@ -178,6 +178,7 @@ returned to the user.
             syslog-tag=s
             syslog-debug!
             tags=s
+            encode=s
             nopaste
             nopaste-public
             nopaste-service=s
@@ -286,6 +287,7 @@ sub cli_helpers_initialize {
     %DEF = (
         DEBUG           => $opts->{debug}   || 0,
         DEBUG_CLASS     => $opts->{'debug-class'} || 'main',
+        ENCODE          => lc($opts->{encode}  || 'json'),
         VERBOSE         => $opts->{verbose} || 0,
         KV_FORMAT       => ': ',
         QUIET           => $opts->{quiet}   || 0,
@@ -299,6 +301,7 @@ sub cli_helpers_initialize {
         NOPASTE_PUBLIC  => $opts->{'nopaste-public'},
     );
     $DEF{COLOR} = $opts->{color} // git_color_check();
+    $DEF{ENCODE} = 'json' unless $DEF{ENCODE} eq 'json' or $DEF{ENCODE} eq 'yaml';
 
     debug("DEFINITIONS");
     debug_var(\%DEF);
@@ -435,17 +438,44 @@ messages to be output.
 
 =cut
 
+my %_valid_opts = map { $_ => 1 } qw(_caller_package clear color data encode indent json kv level no_syslog stderr sticky syslog_level tag yaml);
+sub _output_args {
+    my @args = @_;
+
+    return unless @args;
+
+    if ( @args == 1 ) {
+        return {}, $args[0];
+    }
+
+    if ( is_hashref($args[0]) ) {
+        my $invalid = 0;
+        foreach my $k ( keys %{ $args[0] } ) {
+            next if exists $_valid_opts{$k};
+            $invalid = 1;
+            last;
+        }
+        return {}, @args if $invalid;
+    }
+
+    return @args;
+}
+
 sub output {
-    my $opts = is_hashref($_[0]) ? shift @_ : {};
+    my ($opts,@lines) = _output_args(@_);
+
+    state $json = JSON->new->canonical->utf8->allow_blessed->convert_blessed;
 
     # Return unless we have something to work with;
-    return unless @_;
+    return unless @lines;
 
     # Ensure we're all setup
     cli_helpers_initialize() unless keys %DEF;
 
     # Input/output Arrays
-    my @input = map { my $x=$_; chomp($x) if defined $x; $x; } @_;
+    my $encode = sub { $DEF{ENCODE} eq 'yaml' || $opts->{yaml} ? YAML::XS::Dump($_[0]) : $json->encode($_[0]) };
+    my @input  = map { my $x=$_; chomp($x) if defined $x; $x; }
+                 map { defined $_ && ref $_ ? $encode->($_) : $_ } @lines;
     my @output = ();
 
     # Determine the color
@@ -606,10 +636,8 @@ sub debug_var {
         };
     }
 
-    state $json = JSON->new->utf8->canonical;
-
     my $var = shift;
-    debug($opts, $opts->{json} ? $json->encode($var) : Dump $var);
+    debug($opts, $DEF{ENCODE} eq 'json' || $opts->{json} ? $var : YAML::XS::Dump $var);
 }
 
 =func override( variable => 1 )
