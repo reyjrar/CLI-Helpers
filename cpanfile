@@ -15,7 +15,7 @@ requires "Term::ReadKey" => "0";
 requires "Term::ReadLine" => "0";
 requires "YAML::XS" => "0";
 requires "feature" => "0";
-requires "perl" => "5.010001";
+requires "perl" => "5.013002";
 requires "strict" => "0";
 requires "warnings" => "0";
 recommends "App::Nopaste" => "0";
@@ -26,14 +26,14 @@ on 'test' => sub {
   requires "IO::Handle" => "0";
   requires "IPC::Open3" => "0";
   requires "Pod::Coverage::TrustPod" => "0";
-  requires "Test::More" => "0";
+  requires "Test::More" => "1.302210";
   requires "Test::Perl::Critic" => "0";
-  requires "perl" => "5.010001";
+  requires "perl" => "5.013002";
 };
 
 on 'configure' => sub {
   requires "ExtUtils::MakeMaker" => "0";
-  requires "perl" => "5.010001";
+  requires "perl" => "v5.10.0";
 };
 
 on 'develop' => sub {
