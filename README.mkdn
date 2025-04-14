@@ -146,6 +146,12 @@ the specified color to the string.
 Exported.  Takes an optional hash reference and a list of
 messages to be output.
 
+Any data references in the the `@messages` list will automatically be converted to JSON. You may also pass
+
+    { yaml => 1 }
+
+In the options to output in YAML format.
+
 ## verbose( \\%opts, @messages )
 
 Exported.  Takes an optional hash reference of formatting options.  Automatically

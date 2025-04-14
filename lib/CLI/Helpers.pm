@@ -436,6 +436,12 @@ sub colorize {
 Exported.  Takes an optional hash reference and a list of
 messages to be output.
 
+Any data references in the the C<@messages> list will automatically be converted to JSON. You may also pass
+
+    { yaml => 1 }
+
+In the options to output in YAML format.
+
 =cut
 
 my %_valid_opts = map { $_ => 1 } qw(_caller_package clear color data encode indent json kv level no_syslog stderr sticky syslog_level tag yaml);
