@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 2.1
+version 2.2
 
 # SYNOPSIS
 
@@ -493,11 +493,21 @@ in addition to those websites please use your favorite search engine to discover
 
     [https://metacpan.org/release/CLI-Helpers](https://metacpan.org/release/CLI-Helpers)
 
-- RT: CPAN's Bug Tracker
+- CPAN Testers
 
-    The RT ( Request Tracker ) website is the default bug/issue tracking system for CPAN.
+    The CPAN Testers is a network of smoke testers who run automated tests on uploaded CPAN distributions.
 
-    [https://rt.cpan.org/Public/Dist/Display.html?Name=CLI-Helpers](https://rt.cpan.org/Public/Dist/Display.html?Name=CLI-Helpers)
+    [http://www.cpantesters.org/distro/C/CLI-Helpers](http://www.cpantesters.org/distro/C/CLI-Helpers)
+
+- CPAN Testers Matrix
+
+    The CPAN Testers Matrix is a website that provides a visual overview of the test results for a distribution on various Perls/platforms.
+
+    [http://matrix.cpantesters.org/?dist=CLI-Helpers](http://matrix.cpantesters.org/?dist=CLI-Helpers)
+
+## Bugs / Feature Requests
+
+This module uses the GitHub Issue Tracker: [https://github.com/reyjrar/CLI-Helpers/issues](https://github.com/reyjrar/CLI-Helpers/issues)
 
 ## Source Code
 
