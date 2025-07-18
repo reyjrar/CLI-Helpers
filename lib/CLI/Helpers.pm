@@ -30,23 +30,49 @@ BEGIN {
 
 =head1 EXPORT
 
-This module uses L<Sub::Exporter> for flexible imports, the defaults provided by
-:all are as follows.
+This module exports C<:all> available functions by default.
 
-=head2 Exported Functions
+=head2 Export Groups
 
-    output  ( \%options, @messages )
-    verbose ( \%options, @messages )
-    debug   ( \%options, @messages )
-    debug_var ( \$var )
-    override( option => $value )
+Optionally, you can specify the groups you prefer:
 
-    menu       ( "Question", \%Options or \@Options )
-    text_input ( "Question", validate => { "error message" => sub { length $_[0] } } )
-    confirm    ( "Question" )
+=over 2
 
-    prompt()    Wrapper which mimics IO::Prompt a bit
-    pwprompt()  Wrapper to get sensitive data
+=item C<:all>
+
+    output()
+    verbose()
+    debug()
+    debug_var()
+
+    menu()
+    text_input()
+    confirm()
+    prompt()
+    pwprompt()
+
+    cli_helpers_initialize()
+
+=item C<:output>
+
+Functions that handle output, including:
+
+    output()
+    verbose()
+    debug()
+    debug_var()
+
+=item C<:input>
+
+Functions that handle input from the user:
+
+    menu()
+    text_input()
+    confirm()
+    prompt()
+    pwprompt()
+
+=back
 
 =head2 Import Time Configurations
 
@@ -82,14 +108,15 @@ needing it run, usually an C<output()> call. This is the default.
 require Exporter;
 our @ISA = qw(Exporter);
 
-my @output_tags = qw(output verbose debug debug_var cli_helpers_initialize);
-my @input_tags  = qw(prompt menu text_input confirm pwprompt);
+my @export_output = qw(output verbose debug debug_var);
+my @export_input  = qw(prompt menu text_input confirm pwprompt);
+my @export_always   = qw(cli_helpers_initialize options_description);
 
-our @EXPORT_OK = ( @output_tags, @input_tags );
+our @EXPORT_OK = ( @export_output, @export_input, @export_always );
 our %EXPORT_TAGS = (
-    all    => [@output_tags,@input_tags],
-    input  => \@input_tags,
-    output => \@output_tags,
+    all    => [@export_always, @export_input, @export_output],
+    input  => [@export_always, @export_input],
+    output => [@export_always, @export_output],
 );
 
 my $ARGV_AT_INIT    = 0;
@@ -168,25 +195,76 @@ returned to the user.
 
 =cut
 
+my %OPTIONS = (
+    color => {
+        description => "Enable colorized output",
+        reversible => 1,
+    },
+    'data-file' => {
+        description => "Filename for output tagged as data",
+        format => "s",
+    },
+    debug => {
+        description => "Show developer output",
+    },
+    'debug-class' => {
+        description => "Show developer output for a specific class",
+        format => "s",
+    },
+    nopaste => {
+        description => "Paste output to configured paste service",
+    },
+    'nopaste-public' => {
+        description => "Must be set to use public paste services",
+    },
+    'nopaste-service' => {
+        description => "Comma-separated App::Nopaste services",
+        format => "s",
+    },
+    quiet => {
+        description => "Suppress output to STDERR and STDOUT",
+    },
+    syslog => {
+        description => "Generate messages to syslog as well",
+    },
+    'syslog-debug' => {
+        description => "Enable debug messages to syslog if in use",
+    },
+    'syslog-facility' => {
+        description => "Syslog facility, defaults to 'local0'",
+        format => "s",
+    },
+    'syslog-tag' => {
+        description => "Syslog program name, defaults to script name",
+        format => "s",
+    },
+    tags => {
+        description => "A comma separated list of tags to display",
+        format => "s",
+    },
+    verbose => {
+        aliases => [qw(v)],
+        description => "Incremental, increase verbosity output",
+        incremental => 1,
+    },
+);
+
 sub _parse_options {
     my ($opt_ref) = @_;
-    my @opt_spec = qw(
-        color!
-        verbose|v+
-        debug
-        debug-class=s
-        quiet
-        data-file=s
-        syslog!
-        syslog-facility=s
-        syslog-tag=s
-        syslog-debug!
-        tags=s
-        encode=s
-        nopaste
-        nopaste-public
-        nopaste-service=s
-    );
+    my @opt_spec;
+
+    foreach my $opt (sort keys %OPTIONS) {
+        my $def = $OPTIONS{$opt};
+        my $spec = join("|", $opt, $def->{aliases} ? @{ $def->{aliases} } : ());
+        if ( $def->{format} ) {
+            $spec .= "=$def->{format}";
+        } elsif ( $def->{incremental} ) {
+            $spec .= "+";
+        } elsif ( $def->{reversible} ) {
+            $spec .= "!";
+        }
+        push @opt_spec, $spec;
+    }
 
     my $argv;
     my %opt;
@@ -222,6 +300,54 @@ sub _open_data_file {
     };
 }
 
+
+=func options_description()
+
+Returns an array of arrayrefs to use with L<Getopt::Long::Descriptive>.
+
+    use CLI::Helpers qw( option_description );
+    use Getopt::Long::Descriptive qw( describe_options );
+
+    my ($opt,$usage) = describe_options("%c %o",
+        # Your opts here
+        options_description(),
+    );
+
+=cut
+
+sub options_description {
+    my @description = (
+        [],
+        ["CLI::Helpers Options"],
+    );
+
+    my(@opt,@desc);
+    my $opt_width = 0;
+    foreach my $opt ( sort keys %OPTIONS ) {
+        my $def = $OPTIONS{$opt};
+        my $desc = sprintf "--%s", $opt;
+        if ( $def->{aliases} ) {
+            $desc .= ' (';
+            foreach my $alias ( @{ $def->{aliases} } ) {
+                $desc .= sprintf "or %s%s", length($alias) > 1 ? '--' : '-', $alias;
+            }
+            $desc .= ')';
+        }
+        push @opt, $desc;
+        $opt_width = length($desc) if length($desc) > $opt_width;
+        push @desc, $def->{description};
+        if ( $def->{reversible} ) {
+            push @opt, sprintf "--no%s", $opt;
+            push @desc, $def->{description} =~ s/Enable/Disable/r;
+        }
+    }
+
+    while( @opt && @desc ) {
+        push @description, [sprintf "%-${opt_width}s  %s", shift(@opt), shift(@desc) ];
+    }
+
+    return @description;
+}
 
 # Set defaults
 my %DEF     = ();
@@ -281,7 +407,8 @@ Or if you'd prefer not to touch C<@ARGV> at all, you pass in an array ref:
 sub cli_helpers_initialize {
     my ($argv) = @_;
 
-    state $opts = _parse_options($argv);
+    state $defaults = _parse_options() unless $argv;
+    my $opts = $argv ? _parse_options($argv) : $defaults;
     _open_data_file($opts->{'data-file'}) if $opts->{'data-file'};
 
     # Initialize Global Definitions
