@@ -9,7 +9,7 @@ use warnings;
 
 use Capture::Tiny qw(capture);
 use File::Basename;
-use Getopt::Long qw(GetOptionsFromArray :config pass_through);
+use Getopt::Long qw(GetOptionsFromArray);
 use IO::Interactive qw( is_interactive );
 use JSON::MaybeXS;
 use Module::Load qw(load);
@@ -101,12 +101,15 @@ sub import {
 
     my @import = ();
     # We need to process the config options
+    my $explicit_argv = 0;
     foreach my $arg ( @args ) {
         if( $arg eq 'delay_argv' ) {
             $ARGV_AT_INIT = 0;
+            $explicit_argv++;
         }
         elsif( $arg eq 'preprocess_argv' ) {
             $ARGV_AT_INIT = 1;
+            $explicit_argv++;
         }
         elsif( $arg eq 'copy_argv' ) {
             $COPY_ARGV = 1;
@@ -115,6 +118,10 @@ sub import {
         else {
             push @import, $arg;
         }
+    }
+    if ( $explicit_argv != 1 ) {
+        my ($package) = caller;
+        $ARGV_AT_INIT = $package eq 'main';
     }
 
     CLI::Helpers->export_to_level( 1, @import );
@@ -161,52 +168,46 @@ returned to the user.
 
 =cut
 
-{
-    my @argv_original = ();
-    my $parsed_argv = 0;
-    sub _parse_options {
-        my ($opt_ref) = @_;
-        my @opt_spec = qw(
-            color!
-            verbose|v+
-            debug
-            debug-class=s
-            quiet
-            data-file=s
-            syslog!
-            syslog-facility=s
-            syslog-tag=s
-            syslog-debug!
-            tags=s
-            encode=s
-            nopaste
-            nopaste-public
-            nopaste-service=s
-        );
+sub _parse_options {
+    my ($opt_ref) = @_;
+    my @opt_spec = qw(
+        color!
+        verbose|v+
+        debug
+        debug-class=s
+        quiet
+        data-file=s
+        syslog!
+        syslog-facility=s
+        syslog-tag=s
+        syslog-debug!
+        tags=s
+        encode=s
+        nopaste
+        nopaste-public
+        nopaste-service=s
+    );
 
-        my $argv;
-        my %opt;
-        if( defined $opt_ref && is_arrayref($opt_ref) ) {
-            # If passed an argv array, use that
-            $argv = $COPY_ARGV ? [ @{ $opt_ref } ] : $opt_ref;
-        }
-        else {
-            # Ensure multiple calls to cli_helpers_initialize() yield the same results
-            if ( $parsed_argv ) {
-                ## no critic
-                @ARGV = @argv_original;
-                ## use critic
-            }
-            else {
-                @argv_original = @ARGV;
-                $parsed_argv++;
-            }
-            # Operate on @ARGV
-            $argv = $COPY_ARGV ? [ @ARGV ] : \@ARGV;
-        }
-        GetOptionsFromArray($argv, \%opt, @opt_spec );
-        return \%opt;
+    my $argv;
+    my %opt;
+    if( defined $opt_ref && is_arrayref($opt_ref) ) {
+        # If passed an argv array, use that
+        $argv = $COPY_ARGV ? [ @{ $opt_ref } ] : $opt_ref;
     }
+    else {
+        $argv = $COPY_ARGV ? [ @ARGV ] : \@ARGV;
+    }
+    # Set pass_through and save previous settings
+    my $prev = Getopt::Long::Configure('pass_through');
+    eval {
+        GetOptionsFromArray($argv, \%opt, @opt_spec );
+    } or do {
+        my $err = $@;
+        warn "CLI::Helpers::_parse_options failed: $err";
+    };
+    # Restore previous settings
+    Getopt::Long::Configure($prev);
+    return \%opt;
 }
 
 my $DATA_HANDLE = undef;
@@ -280,7 +281,7 @@ Or if you'd prefer not to touch C<@ARGV> at all, you pass in an array ref:
 sub cli_helpers_initialize {
     my ($argv) = @_;
 
-    my $opts = _parse_options($argv);
+    state $opts = _parse_options($argv);
     _open_data_file($opts->{'data-file'}) if $opts->{'data-file'};
 
     # Initialize Global Definitions
