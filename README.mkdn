@@ -82,6 +82,18 @@ Getopt::Long in your script.
 
 # FUNCTIONS
 
+## options\_description()
+
+Returns an array of arrayrefs to use with [Getopt::Long::Descriptive](https://metacpan.org/pod/Getopt%3A%3ALong%3A%3ADescriptive).
+
+    use CLI::Helpers qw( option_description );
+    use Getopt::Long::Descriptive qw( describe_options );
+
+    my ($opt,$usage) = describe_options("%c %o",
+        # Your opts here
+        options_description(),
+    );
+
 ## cli\_helpers\_initialize
 
 This is called automatically when `preprocess_argv` is set. By default, it'll
@@ -251,23 +263,45 @@ See also: **text\_input**
 
 # EXPORT
 
-This module uses [Sub::Exporter](https://metacpan.org/pod/Sub%3A%3AExporter) for flexible imports, the defaults provided by
-:all are as follows.
+This module exports `:all` available functions by default.
 
-## Exported Functions
+## Export Groups
 
-    output  ( \%options, @messages )
-    verbose ( \%options, @messages )
-    debug   ( \%options, @messages )
-    debug_var ( \$var )
-    override( option => $value )
+Optionally, you can specify the groups you prefer:
 
-    menu       ( "Question", \%Options or \@Options )
-    text_input ( "Question", validate => { "error message" => sub { length $_[0] } } )
-    confirm    ( "Question" )
+- `:all`
 
-    prompt()    Wrapper which mimics IO::Prompt a bit
-    pwprompt()  Wrapper to get sensitive data
+        output()
+        verbose()
+        debug()
+        debug_var()
+
+        menu()
+        text_input()
+        confirm()
+        prompt()
+        pwprompt()
+
+        cli_helpers_initialize()
+
+- `:output`
+
+    Functions that handle output, including:
+
+        output()
+        verbose()
+        debug()
+        debug_var()
+
+- `:input`
+
+    Functions that handle input from the user:
+
+        menu()
+        text_input()
+        confirm()
+        prompt()
+        pwprompt()
 
 ## Import Time Configurations
 
