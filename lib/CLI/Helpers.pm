@@ -30,7 +30,7 @@ BEGIN {
 
 =head1 EXPORT
 
-This module exports C<:all> available functions by default.
+This module exports the C<:all> group by default.
 
 =head2 Export Groups
 
@@ -38,12 +38,14 @@ Optionally, you can specify the groups you prefer:
 
 =over 2
 
-=item C<:all>
+=item B<:output>
 
     output()
     verbose()
     debug()
     debug_var()
+
+=item B<:input>
 
     menu()
     text_input()
@@ -51,30 +53,19 @@ Optionally, you can specify the groups you prefer:
     prompt()
     pwprompt()
 
-    cli_helpers_initialize()
+=item B<:all>
 
-=item C<:output>
-
-Functions that handle output, including:
-
-    output()
-    verbose()
-    debug()
-    debug_var()
-
-=item C<:input>
-
-Functions that handle input from the user:
-
-    menu()
-    text_input()
-    confirm()
-    prompt()
-    pwprompt()
+    :output
+    :input
 
 =back
 
-=head2 Import Time Configurations
+All groups include these functions:
+
+    cli_helpers_initialize()
+    options_description()
+
+=head2 Configuration
 
 It's possible to change the behavior of the import process.
 
@@ -90,14 +81,16 @@ Instead of messing with C<@ARGV>, operate on a copy of C<@ARGV>.
 
 This causes the C<@ARGV> processing to happen during the C<INIT> phase, after
 import but before runtime. This is usually OK for scripts, but for use in
-libraries, it may be undesirable.
+libraries, it may be undesirable. This is the default when C<CLI::Helpers> is
+imported from the C<main> package.
 
     use CLI::Helpers qw( :output preprocess_argv );
 
 =item B<delay_argv>
 
 This causes the C<@ARGV> processing to happen when the first call to a function
-needing it run, usually an C<output()> call. This is the default.
+needing it run, usually an C<output()> call. This is the default when import
+from any other package other than C<main>.
 
     use CLI::Helpers qw( :output delay_argv );
 
@@ -110,7 +103,7 @@ our @ISA = qw(Exporter);
 
 my @export_output = qw(output verbose debug debug_var);
 my @export_input  = qw(prompt menu text_input confirm pwprompt);
-my @export_always   = qw(cli_helpers_initialize options_description);
+my @export_always = qw(cli_helpers_initialize options_description);
 
 our @EXPORT_OK = ( @export_output, @export_input, @export_always );
 our %EXPORT_TAGS = (
@@ -301,54 +294,6 @@ sub _open_data_file {
 }
 
 
-=func options_description()
-
-Returns an array of arrayrefs to use with L<Getopt::Long::Descriptive>.
-
-    use CLI::Helpers qw( option_description );
-    use Getopt::Long::Descriptive qw( describe_options );
-
-    my ($opt,$usage) = describe_options("%c %o",
-        # Your opts here
-        options_description(),
-    );
-
-=cut
-
-sub options_description {
-    my @description = (
-        [],
-        ["CLI::Helpers Options"],
-    );
-
-    my(@opt,@desc);
-    my $opt_width = 0;
-    foreach my $opt ( sort keys %OPTIONS ) {
-        my $def = $OPTIONS{$opt};
-        my $desc = sprintf "--%s", $opt;
-        if ( $def->{aliases} ) {
-            $desc .= ' (';
-            foreach my $alias ( @{ $def->{aliases} } ) {
-                $desc .= sprintf "or %s%s", length($alias) > 1 ? '--' : '-', $alias;
-            }
-            $desc .= ')';
-        }
-        push @opt, $desc;
-        $opt_width = length($desc) if length($desc) > $opt_width;
-        push @desc, $def->{description};
-        if ( $def->{reversible} ) {
-            push @opt, sprintf "--no%s", $opt;
-            push @desc, $def->{description} =~ s/Enable/Disable/r;
-        }
-    }
-
-    while( @opt && @desc ) {
-        push @description, [sprintf "%-${opt_width}s  %s", shift(@opt), shift(@desc) ];
-    }
-
-    return @description;
-}
-
 # Set defaults
 my %DEF     = ();
 my $TERM    = undef;
@@ -356,7 +301,7 @@ my @STICKY  = ();
 my @NOPASTE = ();
 my %TAGS    = ();
 
-=func cli_helpers_initialize
+=func cli_helpers_initialize()
 
 This is called automatically when C<preprocess_argv> is set. By default, it'll
 be run the first time a definition is needed, usually the first call to
@@ -364,21 +309,20 @@ C<output()>.  If called automatically, it will operate on C<@ARGV>.  You can
 optionally pass an array reference to this function and it'll operate that
 instead.
 
-In most cases, you don't need to call this function directly.  It must be
-explicitly requested in the import.
+In most cases, you don't need to call this function directly.
 
-
+    #!perl
+    # Normal use from main package in a script
+    use v5.42;
     use CLI::Helpers qw( :output );
 
     ...
-    # I want access to ARGV before CLI::Helpers;
+    # CLI::Helpers has already stripped its args from @ARGV
     my %opts = get_important_things_from(\@ARGV);
 
-    # Now, let CLI::Helpers take the rest, implicit
-    #   call to cli_helpers_initialize()
     output("ready");
 
-Alternatively, you could:
+This is the same as specifying C<preprocess_argv> from the C<main> package.
 
     use CLI::Helpers qw( :output preprocess_argv );
 
@@ -393,7 +337,7 @@ Alternatively, you could:
 
 Or if you'd prefer not to touch C<@ARGV> at all, you pass in an array ref:
 
-    use CLI::Helpers qw( :output );
+    use CLI::Helpers qw( :output delay_argv );
 
     my ($opt,$usage) = describe_option( ... );
 
@@ -509,15 +453,71 @@ END {
     closelog() if $DEF{SYSLOG};
 }
 
-=func def
+=func options_description()
 
-Not exported by default, returns the setting defined.
+Returns an array of arrayrefs to use with L<Getopt::Long::Descriptive>.
+
+    use CLI::Helpers qw( option_description );
+    use Getopt::Long::Descriptive qw( describe_options );
+
+    my ($opt,$usage) = describe_options("%c %o",
+        # Your opts here
+        options_description(),
+    );
 
 =cut
 
-sub def { return exists $DEF{$_[0]} ? $DEF{$_[0]} : undef }
+sub options_description {
+    my @description = (
+        [],
+        ["CLI::Helpers Options"],
+    );
 
-=func git_color_check
+    my(@opt,@desc);
+    my $opt_width = 0;
+    foreach my $opt ( sort keys %OPTIONS ) {
+        my $def = $OPTIONS{$opt};
+        my $desc = sprintf "--%s", $opt;
+        if ( $def->{aliases} ) {
+            $desc .= ' (';
+            foreach my $alias ( @{ $def->{aliases} } ) {
+                $desc .= sprintf "or %s%s", length($alias) > 1 ? '--' : '-', $alias;
+            }
+            $desc .= ')';
+        }
+        push @opt, $desc;
+        $opt_width = length($desc) if length($desc) > $opt_width;
+        push @desc, $def->{description};
+        if ( $def->{reversible} ) {
+            push @opt, sprintf "--no%s", $opt;
+            push @desc, $def->{description} =~ s/Enable/Disable/r;
+        }
+    }
+
+    while( @opt && @desc ) {
+        push @description, [sprintf "%-${opt_width}s  %s", shift(@opt), shift(@desc) ];
+    }
+
+    return @description;
+}
+
+=func colorize( $color => 'message to be output' )
+
+Not exported by default.  Checks if color is enabled and applies
+the specified color to the string.
+
+=cut
+
+sub colorize {
+    my ($color,$string) = @_;
+
+   if( defined $color && $DEF{COLOR} ) {
+        $string=colored([ $color ], $string);
+    }
+    return $string;
+}
+
+=func git_color_check()
 
 Not exported by default.  Returns 1 if git is configured to output
 using color of 0 if color is not enabled.
@@ -543,23 +543,15 @@ sub git_color_check {
     return 0;
 }
 
-=func colorize( $color => 'message to be output' )
+=func def($key)
 
-Not exported by default.  Checks if color is enabled and applies
-the specified color to the string.
+Not exported by default, returns the setting defined.
 
 =cut
 
-sub colorize {
-    my ($color,$string) = @_;
+sub def { return exists $DEF{$_[0]} ? $DEF{$_[0]} : undef }
 
-   if( defined $color && $DEF{COLOR} ) {
-        $string=colored([ $color ], $string);
-    }
-    return $string;
-}
-
-=func output( \%opts, @messages )
+=output output( \%opts, @messages )
 
 Exported.  Takes an optional hash reference and a list of
 messages to be output.
@@ -692,7 +684,7 @@ sub output {
     }
 }
 
-=func verbose( \%opts, @messages )
+=output verbose( \%opts, @messages )
 
 Exported.  Takes an optional hash reference of formatting options.  Automatically
 overrides the B<level> parameter to 1 if it's not set.
@@ -714,7 +706,7 @@ sub verbose {
     output( $opts, @msgs );
 }
 
-=func debug( \%opts, @messages )
+=output debug( \%opts, @messages )
 
 Exported.  Takes an optional hash reference of formatting options.
 Does not output anything unless DEBUG is set.
@@ -743,7 +735,7 @@ sub debug {
     output( $opts, @msgs );
 }
 
-=func debug_var( \%opts, \%Variable )
+=output debug_var( \%opts, \%Variable )
 
 Exported.  Takes an optional hash reference of formatting options.
 Does not output anything unless DEBUG is set.
@@ -791,7 +783,7 @@ sub override {
     $DEF{$def_var} = $value;
 }
 
-=func confirm("prompt")
+=input confirm("prompt")
 
 Exported.  Creates a Yes/No Prompt which accepts y/n or yes/no case insensitively
 but requires one or the other.
@@ -816,7 +808,7 @@ sub confirm {
     return $_Confirm_Valid->{$answer};
 }
 
-=func text_input("prompt", validate => { "too short" => sub { length $_ > 10 } })
+=input text_input("prompt", validate => { "too short" => sub { length $_ > 10 } })
 
 Exported.  Provides a prompt to the user for input.  If validate is passed, it should be a hash reference
 containing keys of error messages and values which are subroutines to validate the input available as $_.
@@ -893,7 +885,7 @@ sub text_input {
     return $text;
 }
 
-=func menu("prompt", $ArrayOrHashRef)
+=input menu("prompt", $ArrayOrHashRef)
 
 Exported.  Used to create a menu of options from a list.  Can be either a hash or array reference
 as the second argument.  In the case of a hash reference, the values will be displayed as options while
@@ -935,7 +927,7 @@ sub menu {
     return $ref{$choice};
 }
 
-=func pwprompt("Prompt", options )
+=input pwprompt("Prompt", options )
 
 Exported.  Synonym for text_input("Password: ", noecho => 1);  Also requires the password to be longer than 0 characters.
 
@@ -957,7 +949,7 @@ sub pwprompt {
     );
 }
 
-=func prompt("Prompt", options )
+=input prompt("Prompt", options )
 
 Exported.  Wrapper function with rudimentary mimicry of IO::Prompt(er).
 Uses:
@@ -1033,7 +1025,26 @@ sub _get_input {
 
 =head1 SYNOPSIS
 
-Use this module to make writing intelligent command line scripts easier.
+This module provides a library of useful functions for constructing simple command
+line interfaces.  It is able to extract information from the environment and your
+~/.gitconfig to display data in a reasonable manner.
+
+    use CLI::Helpers;
+
+    ...
+    output({color=>"green"}, "Hello, world!");
+    debug({color=>"yellow"}, "Debug output!");
+
+Using this module adds argument parsing using L<Getopt::Long> to your script.  It
+enables pass-through, so you can still use your own argument parsing routines or
+L<Getopt::Long> in your script.
+
+
+=head1 EXAMPLE
+
+A simple example of how to use this module and what it does.
+
+=head2 Script
 
     #!/usr/bin/env perl
     use CLI::Helpers qw(:all);
@@ -1062,7 +1073,7 @@ Use this module to make writing intelligent command line scripts easier.
     # Ask for a favorite animal
     my $favorite = menu("Select your favorite animal:", [qw(dog cat pig fish otter)]);
 
-Running:
+=head2 Usage
 
     $ ./test.pl
     Hello, World!
@@ -1095,16 +1106,6 @@ Running:
 
 
 Colors would be automatically enabled based on the user's ~/.gitconfig
-
-=head1 OVERVIEW
-
-This module provides a library of useful functions for constructing simple command
-line interfaces.  It is able to extract information from the environment and your
-~/.gitconfig to display data in a reasonable manner.
-
-Using this module adds argument parsing using L<Getopt::Long> to your script.  It
-enables pass-through, so you can still use your own argument parsing routines or
-Getopt::Long in your script.
 
 =head1 OUTPUT OPTIONS
 
