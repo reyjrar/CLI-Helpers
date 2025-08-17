@@ -4,7 +4,7 @@ CLI::Helpers - Subroutines for making simple command line scripts
 
 # VERSION
 
-version 2.2
+version 2.3
 
 # SYNOPSIS
 

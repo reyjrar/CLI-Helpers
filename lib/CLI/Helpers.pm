@@ -289,7 +289,7 @@ sub _open_data_file {
         1;
     } or do {
         my $error = $@;
-        output({color=>'red',stderr=>1}, "Attempted to write to $data_file failed: $!");
+        output({color=>'red',stderr=>1}, "Attempted to write to $data_file failed: $error");
     };
 }
 
