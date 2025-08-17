@@ -504,9 +504,9 @@ in addition to those websites please use your favorite search engine to discover
 
 ## Bugs / Feature Requests
 
-This module uses the GitHub Issue Tracker: [https://github.com/reyjrar/CLI-Helpers/issues](https://github.com/reyjrar/CLI-Helpers/issues)
+To report bugs, please visit: [https://codeberg.org/reyjrar/p5-CLI-Helpers/issues](https://codeberg.org/reyjrar/p5-CLI-Helpers/issues)
 
 ## Source Code
 
 This module's source code is available by visiting:
-[https://github.com/reyjrar/CLI-Helpers](https://github.com/reyjrar/CLI-Helpers)
+[https://codeberg.org/reyjrar/p5-CLI-Helpers](https://codeberg.org/reyjrar/p5-CLI-Helpers)
